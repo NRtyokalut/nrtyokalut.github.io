@@ -146,6 +146,11 @@
     saveLaskMap(map);
   }
   function toggleSick(p, date) {
+    if (personExtras(p)[date]) {
+      dayFlash = { id: p.id, date: date, msg: CONFLICT_MSG };
+      return false;
+    }
+    dayFlash = null;
     const map = loadMarkMap();
     const key = laskKey(p);
     const cur = Object.assign({}, map[key] || {});
@@ -154,9 +159,64 @@
     if (Object.keys(cur).length) map[key] = cur;
     else delete map[key];
     saveMarkMap(map);
+    return true;
+  }
+  // Lisävuorot: { [personKey]: { [yyyy-mm-dd]: { start, end } } } minutes. On-device only.
+  const EXTRA_PREFIX = "nrtyokalut.extra.";
+  const CONFLICT_MSG = "Keskeytyspäivää ja lisävuoroa ei voi merkitä samalle päivälle.";
+  let dayFlash = null;
+  let openExtra = null;
+  function loadExtraMap() {
+    if (!state) return {};
+    try {
+      return JSON.parse(localStorage.getItem(EXTRA_PREFIX + state.startDate) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function personExtras(p) {
+    return loadExtraMap()[laskKey(p)] || {};
+  }
+  function saveExtraMap(map) {
+    try {
+      const key = EXTRA_PREFIX + state.startDate;
+      if (!map || !Object.keys(map).length) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(map));
+    } catch (e) {}
+  }
+  function saveExtra(p, date, start, end) {
+    const map = loadExtraMap();
+    const key = laskKey(p);
+    const cur = Object.assign({}, map[key] || {});
+    cur[date] = { start: start, end: end };
+    map[key] = cur;
+    saveExtraMap(map);
+  }
+  function deleteExtra(p, date) {
+    const map = loadExtraMap();
+    const key = laskKey(p);
+    const cur = Object.assign({}, map[key] || {});
+    delete cur[date];
+    if (Object.keys(cur).length) map[key] = cur;
+    else delete map[key];
+    saveExtraMap(map);
+  }
+  function extraCount(p) {
+    return Object.keys(personExtras(p)).length;
+  }
+  function extraMarker(p) {
+    const n = extraCount(p);
+    if (!n) return "";
+    return '<p class="card-extra">' + (n === 1 ? "+1 lisävuoro" : "+" + n + " lisävuoroa") + "</p>";
+  }
+  function personRest(p) {
+    return ShiftCalc.restWithExtras(p.days, personExtras(p), personMarks(p));
+  }
+  function sumPerson(p, key) {
+    return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap);
   }
   function activeLm(p) {
-    return ShiftCalc.sumActive(p.days, personMarks(p), "me");
+    return sumPerson(p, "me");
   }
   function personOt(p) {
     if (!state.otEffective) return null;
@@ -333,20 +393,28 @@
     const items = [];
     result.people.forEach((p) => {
       if (personId && p.id !== personId) return;
+      const rest = personRest(p);
       p.days.forEach((d) => {
         if (isSickDay(p, d)) return;
-        if (d.restBefore === "Not Allowed" || d.restBefore === "Md,s Check") {
+        const r = rest[d.date] || {};
+        if (r.restBefore === "Not Allowed" || r.restBefore === "Md,s Check") {
           const label = (WD_SHORT[d.weekday] || "") + " " + dateFi(d.date);
-          const lepo = d.restBeforeMin != null ? fmt(d.restBeforeMin) : "";
+          const lepo = r.restBeforeMin != null ? fmt(r.restBeforeMin) : "";
           items.push({
-            bad: d.restBefore === "Not Allowed",
+            bad: r.restBefore === "Not Allowed",
             text:
               p.name +
               ": " +
-              lab(d.restBefore) +
+              lab(r.restBefore) +
               " " +
               label +
               (lepo ? " (vuorojen väli " + lepo + ")" : ""),
+          });
+        }
+        if (r.between === "Not Allowed" || r.between === "Md,s Check") {
+          items.push({
+            bad: r.between === "Not Allowed",
+            text: p.name + ": " + lab(r.between) + " " + dateFi(d.date) + " (lisävuoron väli " + fmt(r.betweenMin) + ")",
           });
         }
         if (d.check != null && d.check > 0) {
@@ -375,18 +443,26 @@
 
   function personProblems(p) {
     const problems = [];
+    const rest = personRest(p);
     p.days.forEach((d) => {
       if (isSickDay(p, d)) return;
-      if (d.restBefore === "Not Allowed" || d.restBefore === "Md,s Check") {
+      const r = rest[d.date] || {};
+      if (r.restBefore === "Not Allowed" || r.restBefore === "Md,s Check") {
         const label = (WD_SHORT[d.weekday] || "") + " " + dateFi(d.date).replace(/\.\d{4}$/, ".");
-        const lepo = d.restBeforeMin != null ? fmt(d.restBeforeMin) : "";
+        const lepo = r.restBeforeMin != null ? fmt(r.restBeforeMin) : "";
         problems.push({
-          kind: d.restBefore === "Not Allowed" ? "bad" : "md",
+          kind: r.restBefore === "Not Allowed" ? "bad" : "md",
           text:
-            lab(d.restBefore) +
+            lab(r.restBefore) +
             " " +
             label +
             (lepo ? " (" + lepo + ")" : ""),
+        });
+      }
+      if (r.between === "Not Allowed" || r.between === "Md,s Check") {
+        problems.push({
+          kind: r.between === "Not Allowed" ? "bad" : "md",
+          text: lab(r.between) + " " + dateFi(d.date).replace(/\.\d{4}$/, ".") + " (lisävuoron väli " + fmt(r.betweenMin) + ")",
         });
       }
       if (d.check != null && d.check > 0) {
@@ -435,7 +511,7 @@
       else if (status === "md") nMd++;
       else nOk++;
 
-      const sum = (key) => ShiftCalc.sumActive(p.days, personMarks(p), key);
+      const sum = (key) => sumPerson(p, key);
       const hrs = sum("hrs");
       const me = sum("me");
       const company = sum("company");
@@ -505,6 +581,7 @@
         "</b></div>" +
         "</div>" +
         breakMarker(p) +
+        extraMarker(p) +
         (otNote(personOt(p)) ? '<p class="card-ot-note">' + otNote(personOt(p)) + "</p>" : "") +
         problemList +
         '<span class="card-open">Avaa vuorotaulu →</span>' +
@@ -535,10 +612,62 @@
     }
   }
 
+
+  function extraBits(p, date) {
+    const ex = personExtras(p)[date];
+    const fig = ex ? ShiftCalc.computeShiftFigures(date, ex.start, ex.end, state.holidayMap) : null;
+    const open = openExtra && openExtra.id === p.id && openExtra.date === date;
+    const flash = dayFlash && dayFlash.id === p.id && dayFlash.date === date ? dayFlash.msg : "";
+    const btn =
+      '<button type="button" class="extra-toggle" data-date="' +
+      date +
+      '">' +
+      (fig ? "Lisävuoro ✓" : "+ Lisävuoro") +
+      "</button>";
+    let block = "";
+    if (fig) {
+      block +=
+        '<div class="extra-shift"><div class="extra-head"><span class="tag extra">Lisävuoro</span> <b>' +
+        fmt(fig.start) +
+        "–" +
+        fmt(fig.end) +
+        '</b></div><div class="day-grid">' +
+        "<div><span>Kovat tunnit</span><b>" + fmt(fig.hrs) + "</b></div>" +
+        "<div><span>Yö h</span><b>" + fmt(fig.night) + "</b></div>" +
+        "<div><span>LM</span><b>" + fmt(fig.me) + "</b></div>" +
+        "<div><span>Yritys</span><b>" + fmt(fig.company) + "</b></div>" +
+        "<div><span>Lauantai h</span><b>" + fmt(fig.b25) + "</b></div>" +
+        "<div><span>Pyhä h</span><b>" + fmt(fig.b100) + "</b></div>" +
+        "</div></div>";
+    }
+    const editor =
+      '<div class="extra-editor"' +
+      (open ? "" : " hidden") +
+      ' data-date="' +
+      date +
+      '">' +
+      '<label>Alku <input class="ex-start" inputmode="decimal" value="' +
+      (fig ? fmt(fig.start) : "") +
+      '" placeholder="8:00"></label>' +
+      '<label>Loppu <input class="ex-end" inputmode="decimal" value="' +
+      (fig ? fmt(fig.end) : "") +
+      '" placeholder="16:00"></label>' +
+      '<div class="ot-actions"><button type="button" class="ot-save ex-save" data-date="' +
+      date +
+      '">Tallenna</button>' +
+      (fig ? '<button type="button" class="ot-reset ex-del" data-date="' + date + '">Poista</button>' : "") +
+      "</div>" +
+      (flash && open ? '<p class="extra-err">' + flash + "</p>" : "") +
+      "</div>" +
+      (flash && !open ? '<p class="extra-err">' + flash + "</p>" : "");
+    return { btn: btn, body: block + editor, fig: fig };
+  }
+
   function openDetail(personId) {
     const p = state.people.find((x) => x.id === personId);
     if (!p) return;
     $("detailTitle").textContent = p.name + " · " + p.shiftCount + " vuoroa";
+    const rests = personRest(p);
 
     // Desktop/wide: classic table; mobile: compact day cards (see CSS)
     const tbody = $("detailTable").querySelector("tbody");
@@ -556,7 +685,10 @@
           '">' +
           (sick ? "Keskeytyspäivä ✓" : "Keskeytyspäivä") +
           "</button> " +
+          extraBits(p, d.date).btn +
+          " " +
           dateFi(d.date).slice(0, 5) +
+          extraBits(p, d.date).body +
           "</td>" +
           "<td>" +
           (WD_SHORT[d.weekday] || "") +
@@ -571,9 +703,9 @@
           fmt(d.end) +
           "</td>" +
           '<td class="' +
-          (sick ? "" : restClass(d.restAfter)) +
+          (sick ? "" : restClass((rests[d.date] || {}).restAfter)) +
           '">' +
-          (sick ? "—" : lab(d.restAfter)) +
+          (sick ? "—" : lab((rests[d.date] || {}).restAfter)) +
           "</td>" +
           cell(fmt(d.hrs)) +
           cell(fmt(d.night)) +
@@ -593,13 +725,16 @@
       .map((d) => {
         const hasShift = d.start != null;
         const sick = isSickDay(p, d);
-        const restLabel = !sick && d.restAfter
-          ? lab(d.restAfter) +
-            (d.restAfterMin != null ? " · " + fmt(d.restAfterMin) : "")
+        const rd = rests[d.date] || {};
+        const restLabel = !sick && rd.restAfter
+          ? lab(rd.restAfter) +
+            (rd.restAfterMin != null ? " · " + fmt(rd.restAfterMin) : "")
           : "";
+        const extra = extraBits(p, d.date);
         return (
           '<article class="day-card' +
           (hasShift ? "" : " empty") +
+          (extra.fig ? " has-extra" : "") +
           (sick ? " sick" : "") +
           '">' +
           '<header><strong>' +
@@ -615,6 +750,7 @@
           '">' +
           (sick ? "Keskeytyspäivä ✓" : "Keskeytyspäivä") +
           "</button>" +
+          extra.btn +
           "</header>" +
           (hasShift
             ? '<div class="day-grid' +
@@ -648,18 +784,21 @@
               fmt(d.check) +
               "</b></div>" +
               '<div class="' +
-              (sick ? "" : restClass(d.restAfter)) +
+              (sick ? "" : restClass(rd.restAfter)) +
               '"><span>Vuorojen väli →</span><b>' +
               (restLabel || "—") +
               "</b></div>" +
               "</div>"
-            : '<p class="muted">Ei vuoroa</p>') +
+            : extra.fig
+              ? ""
+              : '<p class="muted">Ei vuoroa</p>') +
+          extra.body +
           "</article>"
         );
       })
       .join("");
 
-    const sum = (key) => ShiftCalc.sumActive(p.days, personMarks(p), key);
+    const sum = (key) => sumPerson(p, key);
     const paintTotals = () => {
     $("detailTotals").innerHTML =
       '<div class="stat"><b>' +
@@ -724,12 +863,66 @@
       paintTotals();
     };
 
+    const redraw = () => {
+      const y = window.scrollY;
+      openDetail(p.id);
+      window.scrollTo(0, y);
+    };
     document.querySelectorAll("#view-detail .sick-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        const y = window.scrollY;
         toggleSick(p, btn.dataset.date);
-        openDetail(p.id);
-        window.scrollTo(0, y);
+        redraw();
+      });
+    });
+    document.querySelectorAll("#view-detail .extra-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const date = btn.dataset.date;
+        if (isSickDay(p, { date: date })) {
+          dayFlash = { id: p.id, date: date, msg: CONFLICT_MSG };
+          openExtra = null;
+          redraw();
+          return;
+        }
+        dayFlash = null;
+        if (openExtra && openExtra.id === p.id && openExtra.date === date) openExtra = null;
+        else openExtra = { id: p.id, date: date };
+        redraw();
+      });
+    });
+    document.querySelectorAll("#view-detail .ex-save").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const date = btn.dataset.date;
+        const box = btn.closest(".extra-editor");
+        const a = ShiftCalc.parseHM(box.querySelector(".ex-start").value);
+        const b = ShiftCalc.parseHM(box.querySelector(".ex-end").value);
+        openExtra = { id: p.id, date: date };
+        if (a == null || b == null) {
+          dayFlash = { id: p.id, date: date, msg: "Anna alku ja loppu muodossa h:mm." };
+          redraw();
+          return;
+        }
+        if (a === b) {
+          dayFlash = { id: p.id, date: date, msg: "Alku ja loppu eivät voi olla samat." };
+          redraw();
+          return;
+        }
+        if (isSickDay(p, { date: date })) {
+          dayFlash = { id: p.id, date: date, msg: CONFLICT_MSG };
+          redraw();
+          return;
+        }
+        saveExtra(p, date, a, b);
+        dayFlash = null;
+        openExtra = null;
+        redraw();
+      });
+    });
+    document.querySelectorAll("#view-detail .ex-del").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        deleteExtra(p, btn.dataset.date);
+        dayFlash = null;
+        openExtra = null;
+        redraw();
       });
     });
 

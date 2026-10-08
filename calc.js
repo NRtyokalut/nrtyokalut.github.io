@@ -786,6 +786,101 @@
   }
 
   /**
+   * One shift's hours from start/end, same segment rules as an Excel shift.
+   * Yritys has no company cell for an app-entered shift, so it follows LM
+   * and the difference (Erotus) is 0.
+   */
+  function computeShiftFigures(date, startMin, endMin, holidayMap) {
+    const d = date instanceof Date ? new Date(date.getFullYear(), date.getMonth(), date.getDate()) : toDate(date);
+    if (!d || startMin == null || endMin == null) return null;
+    const tomorrow = addDays(d, 1);
+    const hol = (holidayMap && holidayMap[dateKey(d)]) || "";
+    const holTom = (holidayMap && holidayMap[dateKey(tomorrow)]) || "";
+    const wd = weekdayFi(d);
+    const wdTom = weekdayFi(tomorrow);
+    const overnight = endMin <= startMin;
+    const hrs = overnight ? endMin - startMin + 24 * 60 : endMin - startMin;
+    const I = overnight ? 24 * 60 : endMin;
+    const K = overnight ? endMin : 0;
+    const curSegs = allSegOverlaps(startMin, I, SEG_CUR);
+    const nextSegs = K > 0 ? allSegOverlaps(0, K, SEG_NEXT) : [0, 0, 0, 0];
+    const night = nightMinutes(curSegs, nextSegs);
+    const b25 = bonus25(wd, !!hol, !!holTom, curSegs, nextSegs);
+    const b100 = bonus100Full(wd, wdTom, !!hol, !!holTom, curSegs, nextSegs);
+    const me = mroundMin(hrs + night * NIGHT_FACTOR);
+    return {
+      start: startMin,
+      end: endMin,
+      hrs: hrs,
+      night: night,
+      b25: b25,
+      b100: b100,
+      me: me,
+      company: me,
+      check: 0,
+    };
+  }
+
+  function shiftAbs(date, start, end) {
+    const d = date instanceof Date ? date : toDate(date);
+    const day0 = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) / 60000;
+    const overnight = end <= start;
+    return { startAbs: day0 + start, endAbs: overnight ? day0 + 24 * 60 + end : day0 + end };
+  }
+
+  /**
+   * Rest gaps including lisävuorot. extras: { date: {start, end} }.
+   * A keskeytyspäivä drops the planned shift. Same rules as the Excel rest:
+   * restAfter only to the next calendar day, restBefore carries across days off.
+   * between = the gap when a planned shift and a lisävuoro share a day.
+   */
+  function restWithExtras(days, extras, marks) {
+    const byDate = {};
+    function add(date, dateObj, start, end, kind) {
+      const a = shiftAbs(dateObj || date, start, end);
+      (byDate[date] = byDate[date] || []).push({ date: date, kind: kind, startAbs: a.startAbs, endAbs: a.endAbs });
+    }
+    (days || []).forEach(function (d) {
+      const off = isKeskeytys(marks && marks[d.date]);
+      if (!off && d.start != null) add(d.date, d.dateObj, d.start, d.end, "plan");
+      const ex = !off && extras && extras[d.date];
+      if (ex && ex.start != null && ex.end != null) add(d.date, d.dateObj, ex.start, ex.end, "extra");
+    });
+    Object.keys(byDate).forEach(function (date) {
+      byDate[date].sort(function (a, b) { return a.startAbs - b.startAbs; });
+    });
+    const out = {};
+    (days || []).forEach(function (d) {
+      out[d.date] = { restAfter: "", restAfterMin: null, restBefore: "", restBeforeMin: null, between: "", betweenMin: null };
+      const list = byDate[d.date];
+      if (list && list.length === 2) {
+        const gap = list[1].startAbs - list[0].endAbs;
+        out[d.date].betweenMin = gap;
+        out[d.date].between = restStatus(gap);
+      }
+    });
+    for (let i = 0; i < days.length - 1; i++) {
+      const a = byDate[days[i].date];
+      const b = byDate[days[i + 1].date];
+      if (!a || !b) continue;
+      const rest = b[0].startAbs - a[a.length - 1].endAbs;
+      out[days[i].date].restAfterMin = rest;
+      out[days[i].date].restAfter = restStatus(rest);
+    }
+    let lastEnd = null;
+    for (let i = 0; i < days.length; i++) {
+      const list = byDate[days[i].date];
+      if (list && lastEnd != null) {
+        const rest = list[0].startAbs - lastEnd;
+        out[days[i].date].restBeforeMin = rest;
+        out[days[i].date].restBefore = restStatus(rest);
+      }
+      if (list) lastEnd = list[list.length - 1].endAbs;
+    }
+    return out;
+  }
+
+  /**
    * Parse company Jakso form sheet (Taul1 / first sheet) into structured data.
    * Accepts a SheetJS workbook or a 2D array sheet.
    */
@@ -1261,12 +1356,22 @@
   }
 
   /** Sum a day field, skipping sick planned shifts. */
-  function sumActive(days, marks, key) {
+  function sumActive(days, marks, key, extras, holidayMap) {
     const sick = sickDateSet(days, marks);
-    return (days || []).reduce(function (a, d) {
+    let total = (days || []).reduce(function (a, d) {
       if (sick[d.date] || d[key] == null) return a;
       return a + d[key];
     }, 0);
+    if (extras) {
+      (days || []).forEach(function (d) {
+        if (sick[d.date]) return;
+        const ex = extras[d.date];
+        if (!ex || ex.start == null || ex.end == null) return;
+        const fig = computeShiftFigures(d.dateObj || d.date, ex.start, ex.end, holidayMap || {});
+        if (fig && fig[key] != null) total += fig[key];
+      });
+    }
+    return total;
   }
 
   /**
@@ -1309,6 +1414,8 @@
     parseJaksoForm,
     parseArrayBuffer,
     computePerson,
+    computeShiftFigures,
+    restWithExtras,
     holidaysForYear,
     holidayName,
     easterSunday,

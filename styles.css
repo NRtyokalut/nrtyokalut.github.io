@@ -318,3 +318,37 @@ button.file-btn { border: none; font: inherit; font-weight: 600; }
 .day-grid.struck b { text-decoration: line-through; color: #8d7a84; }
 table.grid tr.sick td { background: #fde2ec !important; }
 table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
+
+.extra-toggle {
+  border: 1px solid #b9d4ee;
+  background: #f4f9fd;
+  color: var(--brand);
+  border-radius: 999px;
+  font-weight: 700;
+  font-size: 0.72rem;
+  padding: 3px 8px;
+  cursor: pointer;
+  margin-left: 4px;
+}
+.extra-shift {
+  background: #e7f1fb;
+  border: 1px solid #b9d4ee;
+  border-radius: 10px;
+  padding: 8px;
+  margin-top: 8px;
+}
+.extra-head { font-weight: 700; margin-bottom: 6px; }
+.tag.extra { background: #d6e8f8; color: #0B3D5C; }
+.extra-editor {
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.extra-editor[hidden] { display: none; }
+.extra-editor label { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); font-weight: 700; }
+.extra-editor input { font-size: 1rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.extra-editor .ot-actions, .extra-err { grid-column: 1 / -1; }
+.extra-err { color: var(--bad-ink); font-weight: 700; margin: 6px 0 0; font-size: 0.8rem; }
+.card-extra { margin: 0 0 8px; font-size: 0.78rem; font-weight: 700; color: #0B3D5C; }
+.day-card.has-extra { background: #f4f9fd; }
