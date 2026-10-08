@@ -215,11 +215,18 @@
   function sumPerson(p, key) {
     return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap);
   }
+  function stewardN(p) {
+    const days = ShiftCalc.OT_CONFIG.periodDays;
+    return state.dayCount === days ? personN(p) : days;
+  }
+  function stewardMinutes(p) {
+    return ShiftCalc.stewardBonus(isSteward(p), null, stewardN(p));
+  }
   function activeLm(p) {
-    return sumPerson(p, "me") + ShiftCalc.stewardBonus(isSteward(p));
+    return sumPerson(p, "me") + stewardMinutes(p);
   }
   function activeCompany(p) {
-    return sumPerson(p, "company") + ShiftCalc.stewardBonus(isSteward(p));
+    return sumPerson(p, "company") + stewardMinutes(p);
   }
   function loadStewardMap() {
     try {
@@ -244,8 +251,11 @@
     const h = m % 60 === 0 ? String(m / 60) : ShiftCalc.formatHM(m);
     return "LM (+" + h + " h / jakso)";
   }
-  function stewardLine() {
-    return "LM-tunnit +" + fmt(ShiftCalc.stewardBonus(true)) + " (LM ja Yritys)";
+  function stewardLine(p) {
+    const days = ShiftCalc.OT_CONFIG.periodDays;
+    const n = stewardN(p);
+    const mins = ShiftCalc.stewardBonus(true, null, n);
+    return "LM-tunnit +" + fmt(mins) + " (" + n + "/" + days + " pv)";
   }
   function personOt(p) {
     if (!state.otEffective) return null;
@@ -862,7 +872,7 @@
       overtimeText(state.otEffective) +
       (state.otEffective && state.otEffective.overridden ? ' <span class="ot-mod">muutettu</span>' : "") +
       "</p>" +
-      (isSteward(p) ? '<p class="ot-meta totals-note">' + stewardLine() + "</p>" : "") +
+      (isSteward(p) ? '<p class="ot-meta totals-note">' + stewardLine(p) + "</p>" : "") +
       (otNote(personOt(p)) ? '<p class="ot-meta totals-note">' + otNote(personOt(p)) + "</p>" : "");
     };
     paintTotals();

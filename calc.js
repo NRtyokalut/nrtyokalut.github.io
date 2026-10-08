@@ -346,11 +346,18 @@
    * start: Date or 'yyyy-mm-dd' / 'd.m.yyyy'.
    *   lisaK = lisätyö starts, yliK = ylityö 50 % starts, sataK = ylityö 100 % starts.
    */
-  /** Minutes added to LM when the person is luottamusmies. 0 if the flag is off. */
-  function stewardBonus(on, config) {
+  /**
+   * Luottamusmies hours for one jakso. Full stewardMin at n = periodDays.
+   * Scales with laskentapäivät: round(stewardMin * n / 21). n omitted = full amount.
+   * Same minutes are added to LM and to Yritys.
+   */
+  function stewardBonus(on, config, n) {
     if (!on) return 0;
     const cfg = config || OT_CONFIG;
-    return cfg.stewardMin || 0;
+    const full = cfg.stewardMin || 0;
+    const days = cfg.periodDays || 21;
+    if (n == null) return full;
+    return Math.round((full * n) / days);
   }
 
   /**
