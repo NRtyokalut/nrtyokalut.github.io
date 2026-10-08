@@ -283,3 +283,11 @@ table.grid tr:nth-child(even) td:first-child { background: #f8fbfd; }
   color: var(--brand);
   font-weight: 600;
 }
+
+button.file-btn { border: none; font: inherit; font-weight: 600; }
+.start-date-input {
+  display: block; margin: 10px 0 4px; font-size: 1rem; padding: 8px 10px;
+  border: 1px solid var(--line); border-radius: 10px; width: 100%; max-width: 240px;
+  box-sizing: border-box; background: #fff; color: inherit;
+}
+.start-date-err { color: var(--bad-ink); font-weight: 600; margin: 8px 0 0; }

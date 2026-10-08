@@ -127,6 +127,81 @@
     return null;
   }
 
+
+  const WD_PREFIX_RE = /^(maanantai|tiistai|keskiviikko|torstai|perjantai|lauantai|sunnuntai|ma|ti|ke|to|pe|la|su)\.?\s+/i;
+
+  function stripWeekdayPrefix(text) {
+    return String(text).trim().replace(WD_PREFIX_RE, "");
+  }
+
+  /** Excel serial → local Date, only for real date serials (not hours-fractions or small numbers). */
+  function serialToDateSafe(n) {
+    if (typeof n !== "number" || !isFinite(n)) return null;
+    if (n < 20000 || n >= 80000) return null;
+    if (Math.abs(n - Math.round(n)) > 0.001) return null;
+    const utc = Date.UTC(1899, 11, 30) + Math.round(n) * 86400000;
+    const d = new Date(utc);
+    return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate());
+  }
+
+  /**
+   * A cell value that is clearly one date: JS Date, Excel date serial, or text
+   * '12.10.2026' / '12.10.26' / '2026-10-12' / 'Ma 12.10.2026'. No year → null
+   * (see parsePartialDM).
+   */
+  function parseDateValue(v) {
+    if (v == null || v === "") return null;
+    if (v instanceof Date && !isNaN(v.getTime())) {
+      return new Date(v.getUTCFullYear(), v.getUTCMonth(), v.getUTCDate());
+    }
+    if (typeof v === "number") return serialToDateSafe(v);
+    if (typeof v === "string") {
+      const s = stripWeekdayPrefix(v).trim();
+      let m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+      m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})\.?$/);
+      if (m) return new Date(+m[3], +m[2] - 1, +m[1]);
+      m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{2})\.?$/);
+      if (m) {
+        const yy = +m[3];
+        return new Date(yy >= 70 ? 1900 + yy : 2000 + yy, +m[2] - 1, +m[1]);
+      }
+    }
+    return null;
+  }
+
+  /** '12.10.' / '12.10' with no year. */
+  function parsePartialDM(v) {
+    if (typeof v !== "string") return null;
+    const s = stripWeekdayPrefix(v).trim();
+    const m = s.match(/^(\d{1,2})\.(\d{1,2})\.?$/);
+    if (!m) return null;
+    const day = +m[1], month = +m[2];
+    if (day < 1 || day > 31 || month < 1 || month > 12) return null;
+    return { day: day, month: month };
+  }
+
+  function isWeekdayText(v) {
+    if (v == null || typeof v === "number") return false;
+    const s = String(v).trim().toLowerCase();
+    for (let i = 0; i < WEEKDAYS_FI.length; i++) {
+      if (WEEKDAYS_FI[i].toLowerCase() === s) return true;
+    }
+    return false;
+  }
+
+  function isTunnitText(v) {
+    if (v == null || typeof v === "number") return false;
+    const s = String(v).trim().toLowerCase();
+    return s === "tunnit" || s.indexOf("tunnit ") === 0 || s.indexOf("tunnit\n") === 0;
+  }
+
+  function dayDiff(a, b) {
+    const ua = Date.UTC(a.getFullYear(), a.getMonth(), a.getDate());
+    const ub = Date.UTC(b.getFullYear(), b.getMonth(), b.getDate());
+    return Math.round((ub - ua) / 86400000);
+  }
+
   function dateKey(d) {
     return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate());
   }
@@ -540,7 +615,8 @@
    * Parse company Jakso form sheet (Taul1 / first sheet) into structured data.
    * Accepts a SheetJS workbook or a 2D array sheet.
    */
-  function parseJaksoForm(workbook) {
+  function parseJaksoForm(workbook, opts) {
+    opts = opts || {};
     const sheetName = workbook.SheetNames.includes("Taul1")
       ? "Taul1"
       : workbook.SheetNames.includes("Jakso_form")
@@ -593,50 +669,268 @@
       weekdaySet[w] = true;
     });
 
-    // Layout detection:
-    //  Modern: B2=Jakso, names row2, weekday row3, date row4, hours row5
-    //  Older:  B3=Jakso, names row3, weekday row4, date row5, hours row6
-    let nameRow, weekRow0, dateRow0, hoursRow0, periodAddr;
-    if (toDate(raw("B4"))) {
-      nameRow = 2;
-      weekRow0 = 3;
-      dateRow0 = 4;
-      hoursRow0 = 5;
-      periodAddr = "B2";
-    } else if (toDate(raw("B5"))) {
-      nameRow = 3;
-      weekRow0 = 4;
-      dateRow0 = 5;
-      hoursRow0 = 6;
-      periodAddr = "B3";
-    } else if (toDate(raw("B4")) || toDate(raw("B3"))) {
-      // fallback attempt
-      nameRow = 2;
-      weekRow0 = 3;
-      dateRow0 = 4;
-      hoursRow0 = 5;
-      periodAddr = "B2";
-    } else {
-      throw new Error("Jakso-lomakkeelta ei löytynyt aloituspäivää (B4/B5).");
+    // Layout is found by searching, not by fixed cells.
+    // Strategy 1: a cell "Jakso 16" — the start date is directly under it,
+    // or 1–2 cells further down (the row in between is usually the weekday).
+    // Then: a label (Alku / Aloitus / …) with a date beside it;
+    // then a run of 7+ consecutive daily dates; then any date in the top-left.
+    // If nothing yields a start date, return { needsStartDate: true } so the UI can ask.
+    const forcedStart = opts.startDate ? parseDateValue(opts.startDate) || toDate(opts.startDate) : null;
+    const MAX_SCAN_ROW = 200;
+
+    function forEachValue(limitR, limitC, fn) {
+      if (sheet["!ref"] && typeof XLSX !== "undefined" && XLSX.utils && XLSX.utils.decode_range) {
+        const rg = XLSX.utils.decode_range(sheet["!ref"]);
+        const r2 = Math.min(limitR, rg.e.r);
+        const c2 = Math.min(limitC, rg.e.c);
+        for (let r = 0; r <= r2; r++) {
+          for (let c = 0; c <= c2; c++) {
+            const cell = sheet[XLSX.utils.encode_cell({ r: r, c: c })];
+            if (cell && cell.v != null && cell.v !== "") fn(r, c, cell.v);
+          }
+        }
+        return;
+      }
+      Object.keys(sheet).forEach(function (k) {
+        if (k.charAt(0) === "!") return;
+        const cell = sheet[k];
+        if (!cell || cell.v == null || cell.v === "") return;
+        const m = k.match(/^([A-Z]+)(\d+)$/);
+        if (!m) return;
+        let c = 0;
+        for (let i = 0; i < m[1].length; i++) c = c * 26 + (m[1].charCodeAt(i) - 64);
+        const r = +m[2] - 1;
+        if (r <= limitR && c - 1 <= limitC) fn(r, c - 1, cell.v);
+      });
     }
 
-    const startDate = toDate(raw("B" + dateRow0));
-    if (!startDate) throw new Error("Jakso-lomakkeelta ei löytynyt aloituspäivää.");
+    let hintYear = null;
+    forEachValue(120, 25, function (_r, _c, v) {
+      if (hintYear != null) return;
+      const d = parseDateValue(v);
+      if (d) hintYear = d.getFullYear();
+    });
 
+    /** row(1-based) → Date, with 'd.m.' years filled in from neighbours */
+    function resolvedDatesInCol(col0, maxRow) {
+      const items = [];
+      for (let r = 1; r <= maxRow; r++) {
+        const v = raw(colLetter(col0) + r);
+        const full = parseDateValue(v);
+        if (full) {
+          items.push({ row: r, date: full, day: full.getDate(), month: full.getMonth() + 1, year: full.getFullYear() });
+          continue;
+        }
+        const part = parsePartialDM(v);
+        if (part) items.push({ row: r, date: null, day: part.day, month: part.month, year: null });
+      }
+      function pick(day, month, neighbour, dir) {
+        let best = null;
+        for (let y = neighbour.getFullYear() - 1; y <= neighbour.getFullYear() + 1; y++) {
+          const dt = new Date(y, month - 1, day);
+          if (dt.getMonth() !== month - 1 || dt.getDate() !== day) continue;
+          const diff = dir === 1 ? dayDiff(neighbour, dt) : dayDiff(dt, neighbour);
+          if (diff <= 0 || diff > 40) continue;
+          if (!best || diff < best.diff) best = { dt: dt, diff: diff };
+        }
+        return best ? best.dt : null;
+      }
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].date) continue;
+        let prev = null;
+        for (let j = i - 1; j >= 0; j--) if (items[j].date) { prev = items[j]; break; }
+        if (!prev) continue;
+        const dt = pick(items[i].day, items[i].month, prev.date, 1);
+        if (dt) items[i].date = dt;
+      }
+      for (let i = items.length - 1; i >= 0; i--) {
+        if (items[i].date) continue;
+        let next = null;
+        for (let j = i + 1; j < items.length; j++) if (items[j].date) { next = items[j]; break; }
+        if (!next) continue;
+        const dt = pick(items[i].day, items[i].month, next.date, -1);
+        if (dt) items[i].date = dt;
+      }
+      if (hintYear != null) {
+        items.forEach(function (it, i) {
+          if (it.date) return;
+          let dt = new Date(hintYear, it.month - 1, it.day);
+          if (i > 0 && items[i - 1].date && dayDiff(items[i - 1].date, dt) < 0) {
+            dt = new Date(hintYear + 1, it.month - 1, it.day);
+          }
+          it.date = dt;
+        });
+      }
+      const map = {};
+      items.forEach(function (it) {
+        if (it.date && !isNaN(it.date.getTime())) map[it.row] = it.date;
+      });
+      return map;
+    }
+
+    function findDateRun() {
+      let best = null;
+      for (let c = 0; c <= 15; c++) {
+        const map = resolvedDatesInCol(c, 120);
+        const rows = Object.keys(map).map(Number).sort(function (a, b) { return a - b; });
+        for (let i = 0; i < rows.length - 1; i++) {
+          const stride = rows[i + 1] - rows[i];
+          if (stride < 1 || stride > 6) continue;
+          let len = 1;
+          for (let k = i + 1; k < rows.length; k++) {
+            if (rows[k] - rows[k - 1] !== stride) break;
+            if (dayDiff(map[rows[k - 1]], map[rows[k]]) !== 1) break;
+            len++;
+          }
+          if (len >= 7 && (!best || len > best.len)) {
+            best = { col: c, startRow: rows[i], startDate: map[rows[i]], stride: stride, len: len };
+          }
+        }
+      }
+      return best;
+    }
+
+    function findWeekdayRun() {
+      let best = null;
+      for (let c = 0; c <= 15; c++) {
+        const rows = [];
+        for (let r = 1; r <= MAX_SCAN_ROW; r++) {
+          if (isWeekdayText(raw(colLetter(c) + r))) rows.push(r);
+        }
+        for (let i = 0; i < rows.length - 1; i++) {
+          const stride = rows[i + 1] - rows[i];
+          if (stride < 2 || stride > 6) continue;
+          let len = 1;
+          for (let k = i + 1; k < rows.length; k++) {
+            if (rows[k] - rows[k - 1] !== stride) break;
+            len++;
+          }
+          if (len >= 7 && (!best || len > best.len)) {
+            best = { col: c, firstRow: rows[i], stride: stride, len: len };
+          }
+        }
+      }
+      return best;
+    }
+
+    const LABEL_RE = /^\s*(alkupäivä|alkupaiva|jakson\s*alku|aloituspäivä|aloituspaiva|aloitus|alkaa|alku|pvm)\b\s*[:.]?\s*(.*)$/i;
+    function findLabelDate() {
+      let found = null;
+      forEachValue(80, 30, function (r, c, v) {
+        if (found || typeof v !== "string") return;
+        const m = v.trim().match(LABEL_RE);
+        if (!m) return;
+        let dt = m[2] ? parseDateValue(m[2]) || parseDateValue(stripWeekdayPrefix(m[2])) : null;
+        if (!dt) dt = parseDateValue(raw(colLetter(c + 1) + (r + 1)));
+        if (!dt) dt = parseDateValue(raw(colLetter(c) + (r + 2)));
+        if (dt) found = dt;
+      });
+      return found;
+    }
+
+    let jakso = null;
+    forEachValue(MAX_SCAN_ROW, 40, function (r, c, v) {
+      if (jakso || typeof v !== "string") return;
+      const m = v.match(/^\s*jakso\s*(\d+)/i);
+      if (m) jakso = { row: r + 1, col: c, label: String(v).trim(), number: +m[1] };
+    });
+
+    let nameRow = null, weekRow0 = null, dateRow0 = null, hoursRow0 = null;
+    let stride = 3, metaCol = 1, startDate = null, periodLabel = "";
+
+    if (jakso) {
+      periodLabel = jakso.label;
+      metaCol = jakso.col;
+      nameRow = jakso.row;
+      const map = resolvedDatesInCol(jakso.col, MAX_SCAN_ROW);
+      let hitRow = null;
+      for (let off = 1; off <= 3 && !hitRow; off++) {
+        if (map[jakso.row + off]) hitRow = jakso.row + off;
+      }
+      if (hitRow) {
+        dateRow0 = hitRow;
+        startDate = map[hitRow];
+        const later = Object.keys(map).map(Number).filter(function (r) { return r > hitRow; }).sort(function (a, b) { return a - b; });
+        if (later.length && later[0] - hitRow >= 2 && later[0] - hitRow <= 6) stride = later[0] - hitRow;
+        weekRow0 = hitRow - 1 > jakso.row ? hitRow - 1 : hitRow;
+        hoursRow0 = hitRow + 1 < hitRow + stride ? hitRow + 1 : hitRow;
+      } else {
+        // "Jakso" found but the date cell is empty: keep the usual block
+        // (weekday, date, hours) and let a label or the user supply the date.
+        // Do NOT steal a later day's date from the column.
+        weekRow0 = jakso.row + 1;
+        dateRow0 = jakso.row + 2;
+        hoursRow0 = jakso.row + 3;
+        stride = 3;
+      }
+    }
+
+    if (!startDate) {
+      const labelled = findLabelDate();
+      if (labelled) startDate = labelled;
+    }
+    if (!startDate && !jakso) {
+      const run = findDateRun();
+      if (run) {
+        metaCol = run.col;
+        dateRow0 = run.startRow;
+        startDate = run.startDate;
+        stride = run.stride;
+        weekRow0 = isWeekdayText(raw(colLetter(metaCol) + (dateRow0 - 1))) ? dateRow0 - 1 : dateRow0;
+        hoursRow0 = stride > 1 ? dateRow0 + 1 : dateRow0;
+        nameRow = weekRow0 > 1 ? weekRow0 - 1 : dateRow0;
+      }
+    }
+    if (!startDate && !jakso && dateRow0 == null) {
+      const wd = findWeekdayRun();
+      if (wd) {
+        metaCol = wd.col;
+        stride = wd.stride;
+        weekRow0 = wd.firstRow;
+        dateRow0 = wd.firstRow + 1;
+        hoursRow0 = wd.firstRow + 2 < wd.firstRow + stride ? wd.firstRow + 2 : wd.firstRow + 1;
+        nameRow = wd.firstRow - 1;
+      }
+    }
+    if (!startDate && dateRow0 == null) {
+      let any = null;
+      forEachValue(20, 8, function (_r, _c, v) {
+        if (any) return;
+        const d = parseDateValue(v);
+        if (d) any = d;
+      });
+      if (any) startDate = any;
+    }
+    if (!startDate && forcedStart) startDate = forcedStart;
+
+    if (!startDate || dateRow0 == null || nameRow == null) {
+      if (jakso || findWeekdayRun()) {
+        return { needsStartDate: true, periodLabel: periodLabel, periodNumber: jakso ? jakso.number : null };
+      }
+      throw new Error("Jakso-lomaketta ei voitu lukea (ei jaksoa eikä päiviä).");
+    }
+    if (weekRow0 == null) weekRow0 = dateRow0;
+    if (hoursRow0 == null) hoursRow0 = dateRow0 + 1;
+
+    const metaLetter = colLetter(metaCol);
     const MAX_DAYS = 62;
     let dayCount = 0;
     for (let i = 0; i < MAX_DAYS; i++) {
-      const dateRow = dateRow0 + 3 * i;
-      const weekRow = weekRow0 + 3 * i;
-      const bDate = raw("B" + dateRow);
-      const bWeek = raw("B" + weekRow);
-      if (bWeek != null && String(bWeek).trim() === "Tunnit") break;
-      if (bDate != null && String(bDate).trim() === "Tunnit") break;
-      if (toDate(bDate)) {
+      const dateRow = dateRow0 + stride * i;
+      const weekRow = weekRow0 + stride * i;
+      const bDate = raw(metaLetter + dateRow);
+      const bWeek = raw(metaLetter + weekRow);
+      if (isTunnitText(bWeek) || isTunnitText(bDate)) break;
+      if (parseDateValue(bDate) || parsePartialDM(bDate)) {
         dayCount++;
         continue;
       }
-      if (bWeek != null && weekdaySet[String(bWeek).trim()]) {
+      if (isWeekdayText(bWeek) || (weekRow !== dateRow && isWeekdayText(bDate))) {
+        dayCount++;
+        continue;
+      }
+      // First day may have an empty date cell when the user typed the start date.
+      if (i === 0 && isWeekdayText(raw(metaLetter + (dateRow0 - 1)))) {
         dayCount++;
         continue;
       }
@@ -664,9 +958,9 @@
       return true;
     }
 
-    const maxCol0 = Math.min(sheetMaxCol0(), 2 + 45);
+    const maxCol0 = Math.min(sheetMaxCol0(), metaCol + 1 + 45);
     const personCols = [];
-    for (let c = 2; c <= maxCol0; c++) {
+    for (let c = metaCol + 1; c <= maxCol0; c++) {
       const letter = colLetter(c);
       if (colHasPersonData(letter)) personCols.push(letter);
     }
@@ -692,8 +986,8 @@
       const shifts = [];
       const company = [];
       for (let i = 0; i < dayCount; i++) {
-        const formShiftRow = dateRow0 + 3 * i;
-        const formHoursRow = hoursRow0 + 3 * i;
+        const formShiftRow = dateRow0 + stride * i;
+        const formHoursRow = hoursRow0 + stride * i;
         let sh = null;
         if (!hasFormula(letter + formShiftRow)) {
           sh = parseShift(raw(letter + formShiftRow));
@@ -720,13 +1014,13 @@
       });
     }
 
-    const periodCell = raw(periodAddr);
     return {
-      periodLabel: periodCell ? String(periodCell) : "",
+      periodLabel: periodLabel,
+      periodNumber: jakso ? jakso.number : null,
       startDate: dateKey(startDate),
       dates: dates.map(dateKey),
       dayCount: dayCount,
-      layout: { nameRow: nameRow, weekRow0: weekRow0, dateRow0: dateRow0, hoursRow0: hoursRow0 },
+      layout: { nameRow: nameRow, weekRow0: weekRow0, dateRow0: dateRow0, hoursRow0: hoursRow0, stride: stride, metaCol: metaCol },
       people,
       holidayMap,
       overtime: otThresholds,
@@ -743,10 +1037,10 @@
   }
 
   /** Parse from ArrayBuffer */
-  function parseArrayBuffer(buf) {
+  function parseArrayBuffer(buf, opts) {
     if (typeof XLSX === "undefined") throw new Error("SheetJS ei ole ladattu");
     const wb = XLSX.read(buf, { type: "array", cellDates: false, raw: true });
-    return parseJaksoForm(wb);
+    return parseJaksoForm(wb, opts);
   }
 
   /** Summaries for overview */

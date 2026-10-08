@@ -569,16 +569,47 @@
     show("detail");
   }
 
+  let pendingBuf = null;
+  let pendingName = "";
+
+  function showStartPrompt(result, fileName) {
+    $("startPrompt").hidden = false;
+    $("startPromptText").textContent =
+      "Aloituspäivää ei löytynyt — anna jakson alkupäivä" +
+      (result.periodLabel ? " (" + result.periodLabel + ")" : "");
+    $("startDateErr").hidden = true;
+    $("fileName").hidden = false;
+    $("fileName").textContent = (fileName || "Tiedosto") + " — aloituspäivä puuttuu";
+    show("home");
+    $("startDateInput").focus();
+  }
+
+  function useResult(result, fileName) {
+    if (result && result.needsStartDate) {
+      showStartPrompt(result, fileName);
+      return result;
+    }
+    $("startPrompt").hidden = true;
+    state = result;
+    summary = ShiftCalc.summarize(state);
+    if (fileName) {
+      $("fileName").hidden = false;
+      $("fileName").textContent = fileName;
+    }
+    renderOverview();
+    return state;
+  }
+
   async function handleFile(file) {
     if (!file) return;
+    $("startPrompt").hidden = true;
     $("fileName").hidden = false;
     $("fileName").textContent = "Luetaan: " + file.name + " …";
     try {
       const buf = await file.arrayBuffer();
-      state = ShiftCalc.parseArrayBuffer(buf);
-      summary = ShiftCalc.summarize(state);
-      $("fileName").textContent = file.name;
-      renderOverview();
+      pendingBuf = buf;
+      pendingName = file.name;
+      useResult(ShiftCalc.parseArrayBuffer(buf), file.name);
     } catch (err) {
       console.error(err);
       $("fileName").textContent =
@@ -597,16 +628,33 @@
     state = null;
     $("fileInput").value = "";
     $("fileName").hidden = true;
+    $("startPrompt").hidden = true;
+    pendingBuf = null;
     show("home");
   });
   $("btnBack").addEventListener("click", () => show("overview"));
 
+  $("startDateOk").addEventListener("click", () => {
+    const v = $("startDateInput").value;
+    const err = $("startDateErr");
+    if (!v) {
+      err.textContent = "Anna alkupäivä.";
+      err.hidden = false;
+      return;
+    }
+    if (!pendingBuf) return;
+    try {
+      useResult(ShiftCalc.parseArrayBuffer(pendingBuf, { startDate: v }), pendingName);
+    } catch (e) {
+      err.textContent = e && e.message ? e.message : String(e);
+      err.hidden = false;
+    }
+  });
+
   window.__ShiftApp = {
-    loadArrayBuffer: (buf) => {
-      state = ShiftCalc.parseArrayBuffer(buf);
-      summary = ShiftCalc.summarize(state);
-      renderOverview();
-      return state;
+    loadArrayBuffer: (buf, opts) => {
+      pendingBuf = buf;
+      return useResult(ShiftCalc.parseArrayBuffer(buf, opts), "");
     },
     openDetail,
     getState: () => state,
