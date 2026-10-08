@@ -41,6 +41,133 @@
     return p[2] + "." + p[1] + "." + p[0];
   }
 
+  // --- Overtime thresholds: defaults from ShiftCalc.OT_CONFIG, optional per-jakso override ---
+  // Overrides live only in this device's localStorage, keyed by jakso start date.
+  const OT_STORE_PREFIX = "nrtyokalut.otOverride.";
+
+  function loadOtOverride() {
+    if (!state) return null;
+    try {
+      const o = JSON.parse(localStorage.getItem(OT_STORE_PREFIX + state.startDate) || "null");
+      if (!o || (o.lisaK == null && o.sataK == null)) return null;
+      return o;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  function saveOtOverride(o) {
+    try {
+      const key = OT_STORE_PREFIX + state.startDate;
+      if (!o || (o.lisaK == null && o.sataK == null)) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(o));
+    } catch (e) {
+      /* storage unavailable: override just won't persist */
+    }
+  }
+
+  /** Effective thresholds (defaults + override); null when unknown (e.g. non-21-day jakso) */
+  function effectiveOt() {
+    return ShiftCalc.applyOvertimeOverride(state.overtime, loadOtOverride());
+  }
+
+  function personOt(p) {
+    return ShiftCalc.overtimeSplit(p.lmTotal, state.otEffective);
+  }
+
+  /** Overtime value or "—" when the jakso has no thresholds */
+  function fmtOt(ot, key) {
+    return ot ? fmt(ot[key]) : "—";
+  }
+
+  /** Short threshold text, e.g. '50 % yli 114:45 · 100 % yli 132:45 · Arkipyhät: …' */
+  function overtimeText(th) {
+    const def = state.overtime;
+    if (!th) {
+      return "Ylityörajat: ei oletusta " + state.dayCount + " pv jaksolle";
+    }
+    let t = "50 % yli " + fmt(th.lisaK) + " · 100 % yli " + fmt(th.sataK);
+    if (def && def.holidays.length) {
+      t +=
+        " · Arkipyhät: " +
+        def.holidays
+          .map((h) => h.name + " " + dateFi(h.date).replace(/\d{4}$/, ""))
+          .join(", ");
+    }
+    return t;
+  }
+
+  function renderOtMeta() {
+    const th = state.otEffective;
+    const ov = loadOtOverride() || {};
+    const def = state.overtime;
+    const val = (k) => (ov[k] != null ? fmt(ov[k]) : "");
+    const ph = (k) => (def ? fmt(def[k]) : "h:mm");
+    $("otMeta").innerHTML =
+      '<span class="ot-text">' +
+      overtimeText(th) +
+      "</span>" +
+      (th && th.overridden ? ' <span class="ot-mod">muutettu</span>' : "") +
+      ' <button type="button" class="ot-edit-btn" id="otEditBtn">Muuta</button>' +
+      '<div class="ot-editor" id="otEditor" hidden>' +
+      '<label>50 % alkaa<input id="ot50" inputmode="decimal" autocomplete="off" placeholder="' +
+      ph("lisaK") +
+      '" value="' +
+      val("lisaK") +
+      '"></label>' +
+      '<label>100 % alkaa<input id="ot100" inputmode="decimal" autocomplete="off" placeholder="' +
+      ph("sataK") +
+      '" value="' +
+      val("sataK") +
+      '"></label>' +
+      '<div class="ot-actions">' +
+      '<button type="button" class="ot-save" id="otSave">Tallenna</button>' +
+      '<button type="button" class="ot-reset" id="otReset">Palauta oletus</button>' +
+      "</div>" +
+      '<p class="ot-err" id="otErr" hidden></p>' +
+      '<p class="ot-note">' +
+      (def ? "Tyhjä kenttä = oletus. " : "Anna molemmat rajat (h:mm). ") +
+      "Tallentuu vain tähän laitteeseen.</p>" +
+      "</div>";
+
+    $("otEditBtn").addEventListener("click", () => {
+      const ed = $("otEditor");
+      ed.hidden = !ed.hidden;
+      if (!ed.hidden) $("ot50").focus();
+    });
+    $("otReset").addEventListener("click", () => {
+      saveOtOverride(null);
+      recalcOvertime();
+    });
+    $("otSave").addEventListener("click", () => {
+      const err = (msg) => {
+        $("otErr").textContent = msg;
+        $("otErr").hidden = false;
+      };
+      const raw50 = $("ot50").value.trim();
+      const raw100 = $("ot100").value.trim();
+      const v50 = raw50 ? ShiftCalc.parseHM(raw50) : null;
+      const v100 = raw100 ? ShiftCalc.parseHM(raw100) : null;
+      if ((raw50 && v50 == null) || (raw100 && v100 == null)) return err("Anna aika muodossa h:mm, esim. 106:45.");
+      const o = {
+        lisaK: def && v50 === def.lisaK ? null : v50,
+        sataK: def && v100 === def.sataK ? null : v100,
+      };
+      const eff = ShiftCalc.applyOvertimeOverride(def, o);
+      if (!def && !eff && (v50 != null || v100 != null)) return err("Anna molemmat rajat.");
+      const e50 = v50 != null ? v50 : def ? def.lisaK : null;
+      const e100 = v100 != null ? v100 : def ? def.sataK : null;
+      if (e50 != null && e100 != null && e100 < e50) return err("100 % raja ei voi olla pienempi kuin 50 % raja.");
+      saveOtOverride(o);
+      recalcOvertime();
+    });
+  }
+
+  /** Recompute thresholds + all cards in place (keeps scroll position) */
+  function recalcOvertime() {
+    renderOverview(true);
+  }
+
   /** e.g. To 29.10. */
   function dateFiShort(iso, weekday) {
     if (!iso) return "";
@@ -141,12 +268,15 @@
     return "ok";
   }
 
-  function renderOverview() {
+  function renderOverview(keepScroll) {
     const people = state.people;
+    state.otEffective = effectiveOt();
     $("periodMeta").textContent =
       (state.periodLabel ? state.periodLabel + " · " : "") +
       "Alku " +
       dateFi(state.startDate);
+
+    renderOtMeta();
 
     const titleEl = $("overviewTitle");
     if (titleEl) titleEl.textContent = "Kaikki " + people.length + " henkilöä";
@@ -221,6 +351,12 @@
         "<div><span>Pyhä h</span><b>" +
         fmt(b100) +
         "</b></div>" +
+        '<div class="span-half"><span>Ylityö 50 %</span><b>' +
+        fmtOt(personOt(p), "yli50") +
+        "</b></div>" +
+        '<div class="span-half"><span>Ylityö 100 %</span><b>' +
+        fmtOt(personOt(p), "yli100") +
+        "</b></div>" +
         "</div>" +
         problemList +
         '<span class="card-open">Avaa vuorotaulu →</span>' +
@@ -242,7 +378,13 @@
       " vuoroa · " +
       bits.join(" · ");
 
-    show("overview");
+    if (keepScroll) {
+      const y = window.scrollY;
+      show("overview");
+      window.scrollTo(0, y);
+    } else {
+      show("overview");
+    }
   }
 
   function openDetail(personId) {
@@ -382,7 +524,17 @@
       "</b><span>LM yht.</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("company")) +
-      "</b><span>Yritys yht.</span></div>";
+      "</b><span>Yritys yht.</span></div>" +
+      '<div class="stat"><b>' +
+      fmtOt(personOt(p), "yli50") +
+      "</b><span>Ylityö 50 %</span></div>" +
+      '<div class="stat"><b>' +
+      fmtOt(personOt(p), "yli100") +
+      "</b><span>Ylityö 100 %</span></div>" +
+      '<p class="ot-meta totals-note">' +
+      overtimeText(state.otEffective) +
+      (state.otEffective && state.otEffective.overridden ? ' <span class="ot-mod">muutettu</span>' : "") +
+      "</p>";
 
     renderAlerts($("detailAlerts"), state, personId);
     show("detail");

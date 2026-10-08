@@ -196,6 +196,147 @@
     return map[dateKey(d)] || "";
   }
 
+  // --- Lisätyö / ylityö (overtime) ---
+  /**
+   * Default overtime rules. All base numbers live here so they can be changed for another
+   * year / TES. Source: employer's 2026 'Työajan laskenta' table (TES VML, 3-week jakso).
+   * Users can still override a single jakso's thresholds in the app (stored on-device).
+   *   periodDays           rules apply only to jaksos of this length (others: no default)
+   *   baseMin              normal target 114:45 → 50 % starts above this when no arkipyhät
+   *   holidayReductionMin  each listed holiday on Mon–Fri inside the jakso lowers by 8 h
+   *   limit100Min          100 % starts above 132:45 (never lowered)
+   *   lisatyoHolidays      lower the lisätyö threshold (= where 50 % starts; lisätyö is paid at 50 %)
+   *   ylityoHolidays       also lower the statutory ylityö threshold (shown for information)
+   */
+  const OT_CONFIG = {
+    periodDays: 21,
+    baseMin: 114 * 60 + 45,
+    holidayReductionMin: 8 * 60,
+    limit100Min: 132 * 60 + 45,
+    lisatyoHolidays: [
+      "jouluaatto",
+      "joulupaiva",
+      "tapaninpaiva",
+      "uudenvuodenpaiva",
+      "loppiainen",
+      "pitkaperjantai",
+      "toinenPaasiaispaiva",
+      "vappu",
+      "juhannusaatto",
+      "itsenaisyyspaiva",
+    ],
+    ylityoHolidays: ["uudenvuodenpaiva", "vappu", "itsenaisyyspaiva"],
+  };
+
+  /** Holiday id → { name, date(year) }. Easter computed algorithmically (works for any year). */
+  const OT_HOLIDAY_DEFS = {
+    uudenvuodenpaiva: { name: "Uudenvuodenpäivä", date: (y) => new Date(y, 0, 1) },
+    loppiainen: { name: "Loppiainen", date: (y) => new Date(y, 0, 6) },
+    pitkaperjantai: { name: "Pitkäperjantai", date: (y) => addDays(easterSunday(y), -2) },
+    toinenPaasiaispaiva: { name: "2. pääsiäispäivä", date: (y) => addDays(easterSunday(y), 1) },
+    vappu: { name: "Vappu", date: (y) => new Date(y, 4, 1) },
+    helatorstai: { name: "Helatorstai", date: (y) => addDays(easterSunday(y), 39) },
+    juhannusaatto: {
+      name: "Juhannusaatto",
+      // Friday between 19–25 June
+      date: (y) => {
+        const jun19 = new Date(y, 5, 19);
+        return addDays(jun19, (5 - jun19.getDay() + 7) % 7);
+      },
+    },
+    itsenaisyyspaiva: { name: "Itsenäisyyspäivä", date: (y) => new Date(y, 11, 6) },
+    jouluaatto: { name: "Jouluaatto", date: (y) => new Date(y, 11, 24) },
+    joulupaiva: { name: "Joulupäivä", date: (y) => new Date(y, 11, 25) },
+    tapaninpaiva: { name: "Tapaninpäivä", date: (y) => new Date(y, 11, 26) },
+  };
+
+  /** Listed holidays for one year with flags from the config. */
+  function overtimeHolidaysForYear(y, config) {
+    const cfg = config || OT_CONFIG;
+    return cfg.lisatyoHolidays
+      .filter((id) => OT_HOLIDAY_DEFS[id])
+      .map((id) => ({
+        id: id,
+        d: OT_HOLIDAY_DEFS[id].date(y),
+        name: OT_HOLIDAY_DEFS[id].name,
+        lowersYlityo: cfg.ylityoHolidays.indexOf(id) >= 0,
+      }));
+  }
+
+  /**
+   * Default thresholds for a jakso. Returns null unless the jakso length equals
+   * config.periodDays (rules are only defined for the 3-week jakso).
+   * start: Date or 'yyyy-mm-dd' / 'd.m.yyyy'.
+   *   lisaK = where 50 % starts (lowered lisätyö threshold), yliK = statutory ylityö threshold
+   *   (informational), sataK = where 100 % starts.
+   */
+  function overtimeThresholds(start, dayCount, config) {
+    const cfg = config || OT_CONFIG;
+    const s = toDate(start);
+    if (!s || dayCount !== cfg.periodDays) return null;
+    const end = addDays(s, dayCount - 1);
+    const startKey = dateKey(s),
+      endKey = dateKey(end);
+    const holidays = [];
+    for (let y = s.getFullYear(); y <= end.getFullYear(); y++) {
+      overtimeHolidaysForYear(y, cfg).forEach(function (h) {
+        const k = dateKey(h.d);
+        const wd = h.d.getDay(); // 0=Sun, 6=Sat
+        if (k >= startKey && k <= endKey && wd >= 1 && wd <= 5) {
+          holidays.push({ date: k, name: h.name, lowersYlityo: h.lowersYlityo });
+        }
+      });
+    }
+    holidays.sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+    const lisaK = cfg.baseMin - cfg.holidayReductionMin * holidays.length;
+    const yliK = cfg.baseMin - cfg.holidayReductionMin * holidays.filter((h) => h.lowersYlityo).length;
+    return { lisaK: lisaK, yliK: yliK, sataK: cfg.limit100Min, holidays: holidays, start: startKey, end: endKey };
+  }
+
+  /**
+   * Apply a user override {lisaK?, sataK?} (minutes) on top of defaults (may be null).
+   * Returns effective thresholds or null if either limit is still unknown.
+   */
+  function applyOvertimeOverride(defaults, override) {
+    const o = override || {};
+    const lisaK = o.lisaK != null ? o.lisaK : defaults ? defaults.lisaK : null;
+    const sataK = o.sataK != null ? o.sataK : defaults ? defaults.sataK : null;
+    if (lisaK == null || sataK == null) return null;
+    return Object.assign({}, defaults || { holidays: [] }, {
+      lisaK: lisaK,
+      sataK: Math.max(sataK, lisaK),
+      overridden: o.lisaK != null || o.sataK != null,
+    });
+  }
+
+  /** Parse 'h:mm' / 'h.mm' / 'h' (hours may exceed 24) → minutes, or null */
+  function parseHM(text) {
+    if (text == null) return null;
+    const t = String(text).trim().replace(",", ".");
+    let m = t.match(/^(\d{1,3})[:.](\d{2})$/);
+    if (m) return +m[2] < 60 ? +m[1] * 60 + +m[2] : null;
+    m = t.match(/^(\d{1,3})$/);
+    return m ? +m[1] * 60 : null;
+  }
+
+  function clampMin(x, lo, hi) {
+    return Math.min(Math.max(x, lo), hi);
+  }
+
+  /**
+   * Split LM total (minutes). Lisätyö is paid at the same 50 % as ylityö, so the 50 %
+   * band runs from the (possibly lowered) lisätyö threshold up to 132:45.
+   * Ylityö 100 % is everything above 132:45. null if no thresholds (non-21-day jakso).
+   */
+  function overtimeSplit(lmMin, th) {
+    if (!th) return null;
+    const lm = lmMin || 0;
+    return {
+      yli50: clampMin(lm, th.lisaK, th.sataK) - th.lisaK,
+      yli100: Math.max(0, lm - th.sataK),
+    };
+  }
+
   /** Interval overlap length (same logic as Matching R15..) */
   function segOverlap(start, end, segStart, segEnd) {
     // Mirror nested IFs exactly
@@ -537,6 +678,8 @@
       holidaysForYear(y0 + 1)
     );
 
+    const otThresholds = overtimeThresholds(startDate, dayCount);
+
     const people = [];
     for (let p = 0; p < personCols.length; p++) {
       const letter = personCols[p];
@@ -557,6 +700,9 @@
         company.push(hrs);
       }
       const days = computePerson(dates, shifts, company, holidayMap);
+      const lmTotal = days.reduce(function (a, d) {
+        return a + (d.me != null ? d.me : 0);
+      }, 0);
       people.push({
         id: p + 1,
         name: name,
@@ -565,6 +711,8 @@
         shiftCount: days.filter(function (d) {
           return d.start != null;
         }).length,
+        lmTotal: lmTotal,
+        overtime: overtimeSplit(lmTotal, otThresholds),
       });
     }
 
@@ -577,6 +725,7 @@
       layout: { nameRow: nameRow, weekRow0: weekRow0, dateRow0: dateRow0, hoursRow0: hoursRow0 },
       people,
       holidayMap,
+      overtime: otThresholds,
     };
   }
 
@@ -626,6 +775,12 @@
     holidaysForYear,
     holidayName,
     easterSunday,
+    OT_CONFIG,
+    overtimeHolidaysForYear,
+    overtimeThresholds,
+    applyOvertimeOverride,
+    overtimeSplit,
+    parseHM,
     formatHM,
     summarize,
     dateKey,
