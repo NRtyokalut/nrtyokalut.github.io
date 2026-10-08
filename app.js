@@ -98,8 +98,8 @@
       else localStorage.setItem(key, JSON.stringify(map));
     } catch (e) {}
   }
-  // Day marks: { [personKey]: { [yyyy-mm-dd]: "sairas" | "loma" } }. On-device only.
-  // "loma" is stored the same way but not applied yet. Excel colours are not read.
+  // Day marks: { [personKey]: { [yyyy-mm-dd]: "keskeytys" | "sairas" | "loma" } }.
+  // The button stores "keskeytys" (no reason). "sairas"/"loma" are optional reasons for later.
   const MARK_PREFIX = "nrtyokalut.marks.";
   function loadMarkMap() {
     if (!state) return {};
@@ -120,7 +120,7 @@
     } catch (e) {}
   }
   function isSickDay(p, d) {
-    return !!(d && personMarks(p)[d.date] === "sairas");
+    return !!(d && ShiftCalc.isKeskeytys(personMarks(p)[d.date]));
   }
   function sickCount(p) {
     return ShiftCalc.sickDates(p.days, personMarks(p)).length;
@@ -149,8 +149,8 @@
     const map = loadMarkMap();
     const key = laskKey(p);
     const cur = Object.assign({}, map[key] || {});
-    if (cur[date] === "sairas") delete cur[date];
-    else cur[date] = "sairas";
+    if (ShiftCalc.isKeskeytys(cur[date])) delete cur[date];
+    else cur[date] = "keskeytys";
     if (Object.keys(cur).length) map[key] = cur;
     else delete map[key];
     saveMarkMap(map);
@@ -406,19 +406,10 @@
   }
 
   function breakMarker(p) {
-    const sick = sickCount(p);
-    if (state.dayCount !== 21) {
-      return sick ? '<p class="card-break">' + sick + " sairas</p>" : "";
-    }
+    if (state.dayCount !== 21) return "";
     const n = personN(p);
-    if (n === 21 && !sick) return "";
-    return (
-      '<p class="card-break">Keskeytynyt · ' +
-      n +
-      " pv" +
-      (sick ? " · " + sick + " sairas" : "") +
-      "</p>"
-    );
+    if (n === 21) return "";
+    return '<p class="card-break">Keskeytynyt · ' + n + " pv</p>";
   }
 
   function renderOverview(keepScroll) {
@@ -563,7 +554,7 @@
           '" data-date="' +
           d.date +
           '">' +
-          (sick ? "Sairasloma ✓" : "Sairas") +
+          (sick ? "Keskeytyspäivä ✓" : "Keskeytyspäivä") +
           "</button> " +
           dateFi(d.date).slice(0, 5) +
           "</td>" +
@@ -622,7 +613,7 @@
           '" data-date="' +
           d.date +
           '">' +
-          (sick ? "Sairasloma ✓" : "Sairas") +
+          (sick ? "Keskeytyspäivä ✓" : "Keskeytyspäivä") +
           "</button>" +
           "</header>" +
           (hasShift
@@ -712,7 +703,7 @@
       if (!canLask) return;
       const info = personNInfo(p);
       const sick = sickCount(p);
-      const word = sick === 1 ? "sairaspäivä" : "sairaspäivää";
+      const word = sick === 1 ? "keskeytyspäivä" : "keskeytyspäivää";
       $("laskentaLabel").textContent =
         "Laskentapäivät " + info.n + (sick ? " (" + sick + " " + word + ")" : "");
       if (!keepInput) $("laskentaInput").value = info.n == null ? "" : info.n;

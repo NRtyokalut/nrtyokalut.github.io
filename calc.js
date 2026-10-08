@@ -1218,19 +1218,40 @@
   }
 
   /**
-   * Day marks on top of the planned schedule (the Excel file itself is not changed).
-   * kind "sairas" = keskeytyspäivä on any day of the jakso, shift or day off.
-   * A sick shift's hours are left out; a sick day off only lowers laskentapäivät.
-   * "loma" is reserved for the same store (not applied yet).
-   * A later import may map Excel fill colours (green = loma, pink = sairasloma) into this.
+   * Keskeytyspäivä on any day of the jakso (shift or day off): that day's hours
+   * are left out and laskentapäivät drops by one. One generic mark covers sick
+   * leave and holiday. Stored value:
+   *   "keskeytys" — marked in the app, no reason
+   *   "sairas" | "loma" — optional reason (future Excel colours: pink = sairas, green = loma)
+   *   { reason: "sairas"|"loma" } — same, object form
+   * The UI does not ask for a reason.
    */
-  const DAY_MARK_KINDS = ["sairas", "loma"];
+  const DAY_MARK_KINDS = ["keskeytys", "sairas", "loma"];
+
+  /** Optional reason, or "" if the day is marked with no reason. null if not a mark. */
+  function markReason(v) {
+    if (v == null || v === false || v === "") return null;
+    if (typeof v === "string") {
+      if (v === "keskeytys") return "";
+      if (v === "sairas" || v === "loma") return v;
+      return null;
+    }
+    if (typeof v === "object") {
+      if (v.reason === "sairas" || v.reason === "loma") return v.reason;
+      if (v.on) return "";
+    }
+    return null;
+  }
+
+  function isKeskeytys(v) {
+    return markReason(v) !== null;
+  }
 
   function sickDateSet(days, marks) {
     const set = {};
     if (!marks) return set;
     (days || []).forEach(function (d) {
-      if (marks[d.date] === "sairas") set[d.date] = true;
+      if (isKeskeytys(marks[d.date])) set[d.date] = true;
     });
     return set;
   }
@@ -1300,6 +1321,8 @@
     interruptedNorms,
     interruptedSplit,
     DAY_MARK_KINDS,
+    markReason,
+    isKeskeytys,
     sickDates,
     sumActive,
     resolveLaskenta,
