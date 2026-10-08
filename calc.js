@@ -1,3 +1,5 @@
+/*! © 2026 Pekka Rautiainen. Kaikki oikeudet pidätetään. All rights reserved.
+ * Tämän ohjelmiston kopioiminen, muokkaaminen tai jakaminen ilman lupaa on kielletty. */
 /**
  * Vuorotaulun tarkastus — calculation engine (ported from v6 Excel workbook).
  * Works in browser and Node. Times are integer minutes from midnight.

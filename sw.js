@@ -1,4 +1,4 @@
-const CACHE = "nrtyokalut-v44";
+const CACHE = "nrtyokalut-v45";
 const ASSETS = [
   "./",
   "./index.html",
@@ -46,3 +46,5 @@ self.addEventListener("fetch", (e) => {
       .catch(() => caches.match(req, { ignoreSearch: true }))
   );
 });
+
+/*! © 2026 Pekka Rautiainen. Kaikki oikeudet pidätetään. All rights reserved. */

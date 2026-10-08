@@ -31,3 +31,6 @@ Vertaa laskentaa LibreOffice-uudelleenlaskettuun v6-työkirjaan (`golden.json`).
 - `app.js` / `index.html` / `styles.css` — UI
 - `lib/xlsx.full.min.js` — SheetJS (paikallinen)
 - `sw.js` / `manifest.webmanifest` / `icons/` — PWA
+
+---
+© 2026 Pekka Rautiainen. Kaikki oikeudet pidätetään. All rights reserved. Katso LICENSE.
