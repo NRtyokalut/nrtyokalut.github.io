@@ -73,6 +73,12 @@
         <div id="detailTitle" class="period-meta"></div>
       </div>
       <div id="detailAlerts" class="alerts" hidden></div>
+      <div id="laskentaBox" class="laskenta-box" hidden>
+        <label>Laskentapäivät
+          <input type="number" id="laskentaInput" min="1" max="21" step="1" inputmode="numeric" />
+        </label>
+        <p id="laskentaLine" class="ot-meta"></p>
+      </div>
       <p class="scroll-hint" id="detailScrollHint">← Pyyhkäise sivuttain nähdäksesi kaikki sarakkeet →</p>
       <div id="detailCards" class="day-cards"></div>
       <div class="table-wrap detail-table-wrap">
@@ -87,12 +93,6 @@
           </thead>
           <tbody></tbody>
         </table>
-      </div>
-      <div id="laskentaBox" class="laskenta-box" hidden>
-        <label>Laskentapäivät
-          <input type="number" id="laskentaInput" min="1" max="21" step="1" inputmode="numeric" />
-        </label>
-        <p id="laskentaLine" class="ot-meta"></p>
       </div>
       <div id="detailTotals" class="totals"></div>
     </section>
