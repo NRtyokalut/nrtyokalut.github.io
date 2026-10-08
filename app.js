@@ -205,10 +205,10 @@
         "<div><span>Kovat tunnit</span><b>" +
         fmt(hrs) +
         "</b></div>" +
-        "<div><span>25 %</span><b>" +
+        "<div><span>Lauantai h</span><b>" +
         fmt(b25) +
         "</b></div>" +
-        "<div><span>100 %</span><b>" +
+        "<div><span>Pyhä h</span><b>" +
         fmt(b100) +
         "</b></div>" +
         "<div><span>LM</span><b>" +
