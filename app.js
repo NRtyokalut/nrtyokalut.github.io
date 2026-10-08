@@ -326,7 +326,7 @@
               "<div><span>Loppu</span><b>" +
               fmt(d.end) +
               "</b></div>" +
-              "<div><span>Tunnit</span><b>" +
+              "<div><span>Kovat tunnit</span><b>" +
               fmt(d.hrs) +
               "</b></div>" +
               "<div><span>Yö</span><b>" +
@@ -338,10 +338,10 @@
               "<div><span>Yritys</span><b>" +
               fmt(d.company) +
               "</b></div>" +
-              "<div><span>25%</span><b>" +
+              "<div><span>Lauantai h</span><b>" +
               fmt(d.b25) +
               "</b></div>" +
-              "<div><span>100%</span><b>" +
+              "<div><span>Pyhä h</span><b>" +
               fmt(d.b100) +
               "</b></div>" +
               "<div><span>Erotus</span><b>" +
@@ -363,16 +363,16 @@
     $("detailTotals").innerHTML =
       '<div class="stat"><b>' +
       fmt(sum("hrs")) +
-      "</b><span>Tunnit</span></div>" +
+      "</b><span>Kovat tunnit</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("night")) +
       "</b><span>Yö</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("b25")) +
-      "</b><span>25 %</span></div>" +
+      "</b><span>Lauantai h</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("b100")) +
-      "</b><span>100 %</span></div>" +
+      "</b><span>Pyhä h</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("me")) +
       "</b><span>LM yht.</span></div>" +
