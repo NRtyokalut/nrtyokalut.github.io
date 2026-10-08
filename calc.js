@@ -1217,7 +1217,52 @@
     return parseJaksoForm(wb, opts);
   }
 
+  /**
+   * Day marks on top of the planned schedule (the Excel file itself is not changed).
+   * kind "sairas" = keskeytyspäivä: that planned shift's hours are left out and
+   * laskentapäivät drops by one. "loma" is reserved for the same store (not applied yet).
+   * A later import may map Excel fill colours (green = loma, pink = sairasloma) into this.
+   * A mark on a day with no shift does not count.
+   */
+  const DAY_MARK_KINDS = ["sairas", "loma"];
+
+  function sickDateSet(days, marks) {
+    const set = {};
+    if (!marks) return set;
+    (days || []).forEach(function (d) {
+      if (d.start == null) return;
+      if (marks[d.date] === "sairas") set[d.date] = true;
+    });
+    return set;
+  }
+
+  function sickDates(days, marks) {
+    return Object.keys(sickDateSet(days, marks)).sort();
+  }
+
+  /** Sum a day field, skipping sick planned shifts. */
+  function sumActive(days, marks, key) {
+    const sick = sickDateSet(days, marks);
+    return (days || []).reduce(function (a, d) {
+      if (sick[d.date] || d[key] == null) return a;
+      return a + d[key];
+    }, 0);
+  }
+
+  /**
+   * Laskentapäivät. Auto = 21 − sick days, only for a 21-day jakso.
+   * A manual value (1–21) wins until cleared.
+   */
+  function resolveLaskenta(periodDays, sickCount, manual) {
+    const auto = periodDays === 21 ? Math.max(0, 21 - (sickCount || 0)) : null;
+    if (manual != null && manual >= 1 && manual <= 21) {
+      return { n: manual, auto: auto, manual: true };
+    }
+    return { n: auto == null ? null : auto, auto: auto, manual: false };
+  }
+
   /** Summaries for overview */
+
   function summarize(result) {
     const flags = { notAllowed: 0, mdCheck: 0, checkMismatch: 0 };
     const perPerson = result.people.map((p) => {
@@ -1255,6 +1300,10 @@
     INT_TABLES,
     interruptedNorms,
     interruptedSplit,
+    DAY_MARK_KINDS,
+    sickDates,
+    sumActive,
+    resolveLaskenta,
     parseHM,
     formatHM,
     summarize,

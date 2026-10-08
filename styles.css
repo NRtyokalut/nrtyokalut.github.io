@@ -305,3 +305,15 @@ button.file-btn { border: none; font: inherit; font-weight: 600; }
   margin: 0 0 8px; font-size: 0.78rem; font-weight: 700; color: #8a5a00;
 }
 .card-ot-note { margin: -2px 0 8px; font-size: 0.75rem; color: var(--muted); }
+
+.laskenta-box label span { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+#laskentaReset { font-size: 0.78rem; padding: 0; }
+.sick-btn {
+  border: 1px solid var(--line); background: #fff; color: var(--muted);
+  border-radius: 999px; font-size: 0.72rem; font-weight: 700; padding: 3px 8px; cursor: pointer;
+}
+.sick-btn.on { background: #fde2ec; border-color: #e7a0b8; color: #8a2048; }
+.day-card.sick { background: #fde2ec; border-color: #f3c2d4; }
+.day-grid.struck b { text-decoration: line-through; color: #8d7a84; }
+table.grid tr.sick td { background: #fde2ec !important; }
+table.grid td.struck { text-decoration: line-through; color: #8d7a84; }

@@ -91,24 +91,82 @@
       return {};
     }
   }
-  function personN(p) {
-    const v = parseInt(loadLaskMap()[laskKey(p)], 10);
-    return v >= 1 && v <= 21 ? v : 21;
-  }
-  function savePersonN(p, n) {
-    const map = loadLaskMap();
-    if (n === 21) delete map[laskKey(p)];
-    else map[laskKey(p)] = n;
+  function saveLaskMap(map) {
     try {
       const key = LASK_PREFIX + state.startDate;
-      if (!Object.keys(map).length) localStorage.removeItem(key);
+      if (!map || !Object.keys(map).length) localStorage.removeItem(key);
       else localStorage.setItem(key, JSON.stringify(map));
     } catch (e) {}
   }
+  // Day marks: { [personKey]: { [yyyy-mm-dd]: "sairas" | "loma" } }. On-device only.
+  // "loma" is stored the same way but not applied yet. Excel colours are not read.
+  const MARK_PREFIX = "nrtyokalut.marks.";
+  function loadMarkMap() {
+    if (!state) return {};
+    try {
+      return JSON.parse(localStorage.getItem(MARK_PREFIX + state.startDate) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function personMarks(p) {
+    return loadMarkMap()[laskKey(p)] || {};
+  }
+  function saveMarkMap(map) {
+    try {
+      const key = MARK_PREFIX + state.startDate;
+      if (!map || !Object.keys(map).length) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(map));
+    } catch (e) {}
+  }
+  function isSickDay(p, d) {
+    return !!(d && d.start != null && personMarks(p)[d.date] === "sairas");
+  }
+  function sickCount(p) {
+    return ShiftCalc.sickDates(p.days, personMarks(p)).length;
+  }
+  function personNInfo(p) {
+    const raw = loadLaskMap()[laskKey(p)];
+    const manual = raw == null || raw === "" ? null : parseInt(raw, 10);
+    return ShiftCalc.resolveLaskenta(state.dayCount, sickCount(p), Number.isFinite(manual) ? manual : null);
+  }
+  function personN(p) {
+    const info = personNInfo(p);
+    return info.n == null ? 21 : info.n;
+  }
+  /** Manual edit. Kept even when it equals the automatic value, until cleared. */
+  function savePersonN(p, n) {
+    const map = loadLaskMap();
+    map[laskKey(p)] = n;
+    saveLaskMap(map);
+  }
+  function clearPersonN(p) {
+    const map = loadLaskMap();
+    delete map[laskKey(p)];
+    saveLaskMap(map);
+  }
+  function toggleSick(p, date) {
+    const map = loadMarkMap();
+    const key = laskKey(p);
+    const cur = Object.assign({}, map[key] || {});
+    if (cur[date] === "sairas") delete cur[date];
+    else cur[date] = "sairas";
+    if (Object.keys(cur).length) map[key] = cur;
+    else delete map[key];
+    saveMarkMap(map);
+  }
+  function activeLm(p) {
+    return ShiftCalc.sumActive(p.days, personMarks(p), "me");
+  }
   function personOt(p) {
     if (!state.otEffective) return null;
-    if (state.dayCount !== 21) return ShiftCalc.overtimeSplit(p.lmTotal, state.otEffective);
-    return ShiftCalc.interruptedSplit(p.lmTotal, state.otEffective, personN(p));
+    const lm = activeLm(p);
+    if (state.dayCount !== 21) return ShiftCalc.overtimeSplit(lm, state.otEffective);
+    const n = personN(p);
+    if (n < 1) {
+      return { lisa: 0, yli50: 0, yli100: 0, n: 0, unsupported: null, cap50Hit: false, capLisaHit: false, norms: null };
+    }
+    return ShiftCalc.interruptedSplit(lm, state.otEffective, n);
   }
   function otNote(ot) {
     if (!ot) return "";
@@ -124,6 +182,7 @@
     const n = personN(p);
     const th = state.otEffective;
     if (!th) return "";
+    if (n < 1) return "0 laskentapäivää";
     if (th.overridden && n < 21) return "muutetut rajat: tarkista käsin";
     if (th.overridden) return "21 pv · muutetut rajat käytössä";
     const norms = ShiftCalc.interruptedNorms(th.lisaK, th.yliK, n);
@@ -275,6 +334,7 @@
     result.people.forEach((p) => {
       if (personId && p.id !== personId) return;
       p.days.forEach((d) => {
+        if (isSickDay(p, d)) return;
         if (d.restBefore === "Not Allowed" || d.restBefore === "Md,s Check") {
           const label = (WD_SHORT[d.weekday] || "") + " " + dateFi(d.date);
           const lepo = d.restBeforeMin != null ? fmt(d.restBeforeMin) : "";
@@ -316,6 +376,7 @@
   function personProblems(p) {
     const problems = [];
     p.days.forEach((d) => {
+      if (isSickDay(p, d)) return;
       if (d.restBefore === "Not Allowed" || d.restBefore === "Md,s Check") {
         const label = (WD_SHORT[d.weekday] || "") + " " + dateFi(d.date).replace(/\.\d{4}$/, ".");
         const lepo = d.restBeforeMin != null ? fmt(d.restBeforeMin) : "";
@@ -344,6 +405,22 @@
     return "ok";
   }
 
+  function breakMarker(p) {
+    const sick = sickCount(p);
+    if (state.dayCount !== 21) {
+      return sick ? '<p class="card-break">' + sick + " sairas</p>" : "";
+    }
+    const n = personN(p);
+    if (n === 21 && !sick) return "";
+    return (
+      '<p class="card-break">Keskeytynyt · ' +
+      n +
+      " pv" +
+      (sick ? " · " + sick + " sairas" : "") +
+      "</p>"
+    );
+  }
+
   function renderOverview(keepScroll) {
     const people = state.people;
     state.otEffective = effectiveOt();
@@ -367,8 +444,7 @@
       else if (status === "md") nMd++;
       else nOk++;
 
-      const sum = (key) =>
-        p.days.reduce((a, d) => a + (d[key] != null ? d[key] : 0), 0);
+      const sum = (key) => ShiftCalc.sumActive(p.days, personMarks(p), key);
       const hrs = sum("hrs");
       const me = sum("me");
       const company = sum("company");
@@ -437,9 +513,7 @@
         fmtOt(personOt(p), "yli100") +
         "</b></div>" +
         "</div>" +
-        (state.dayCount === 21 && personN(p) !== 21
-          ? '<p class="card-break">Keskeytynyt · ' + personN(p) + " pv</p>"
-          : "") +
+        breakMarker(p) +
         (otNote(personOt(p)) ? '<p class="card-ot-note">' + otNote(personOt(p)) + "</p>" : "") +
         problemList +
         '<span class="card-open">Avaa vuorotaulu →</span>' +
@@ -479,9 +553,20 @@
     const tbody = $("detailTable").querySelector("tbody");
     tbody.innerHTML = p.days
       .map((d) => {
+        const sick = isSickDay(p, d);
+        const cell = (v) => '<td class="' + (sick ? "struck" : "") + '">' + v + "</td>";
         return (
-          "<tr>" +
+          '<tr class="' + (sick ? "sick" : "") + '">' +
           "<td>" +
+          (d.start != null
+            ? '<button type="button" class="sick-btn' +
+              (sick ? " on" : "") +
+              '" data-date="' +
+              d.date +
+              '">' +
+              (sick ? "Sairasloma ✓" : "Sairas") +
+              "</button> "
+            : "") +
           dateFi(d.date).slice(0, 5) +
           "</td>" +
           "<td>" +
@@ -497,31 +582,17 @@
           fmt(d.end) +
           "</td>" +
           '<td class="' +
-          restClass(d.restAfter) +
+          (sick ? "" : restClass(d.restAfter)) +
           '">' +
-          lab(d.restAfter) +
+          (sick ? "—" : lab(d.restAfter)) +
           "</td>" +
-          "<td>" +
-          fmt(d.hrs) +
-          "</td>" +
-          "<td>" +
-          fmt(d.night) +
-          "</td>" +
-          "<td>" +
-          fmt(d.b25) +
-          "</td>" +
-          "<td>" +
-          fmt(d.b100) +
-          "</td>" +
-          "<td>" +
-          fmt(d.me) +
-          "</td>" +
-          "<td>" +
-          fmt(d.company) +
-          "</td>" +
-          "<td>" +
-          fmt(d.check) +
-          "</td>" +
+          cell(fmt(d.hrs)) +
+          cell(fmt(d.night)) +
+          cell(fmt(d.b25)) +
+          cell(fmt(d.b100)) +
+          cell(fmt(d.me)) +
+          cell(fmt(d.company)) +
+          cell(fmt(d.check)) +
           "</tr>"
         );
       })
@@ -532,13 +603,15 @@
     cards.innerHTML = p.days
       .map((d) => {
         const hasShift = d.start != null;
-        const restLabel = d.restAfter
+        const sick = isSickDay(p, d);
+        const restLabel = !sick && d.restAfter
           ? lab(d.restAfter) +
             (d.restAfterMin != null ? " · " + fmt(d.restAfterMin) : "")
           : "";
         return (
           '<article class="day-card' +
           (hasShift ? "" : " empty") +
+          (sick ? " sick" : "") +
           '">' +
           '<header><strong>' +
           (WD_SHORT[d.weekday] || "") +
@@ -546,9 +619,20 @@
           dateFi(d.date) +
           "</strong>" +
           (d.special ? '<span class="tag">' + d.special + "</span>" : "") +
+          (hasShift
+            ? '<button type="button" class="sick-btn' +
+              (sick ? " on" : "") +
+              '" data-date="' +
+              d.date +
+              '">' +
+              (sick ? "Sairasloma ✓" : "Sairas") +
+              "</button>"
+            : "") +
           "</header>" +
           (hasShift
-            ? '<div class="day-grid">' +
+            ? '<div class="day-grid' +
+              (sick ? " struck" : "") +
+              '">' +
               "<div><span>Alku</span><b>" +
               fmt(d.start) +
               "</b></div>" +
@@ -577,7 +661,7 @@
               fmt(d.check) +
               "</b></div>" +
               '<div class="' +
-              restClass(d.restAfter) +
+              (sick ? "" : restClass(d.restAfter)) +
               '"><span>Vuorojen väli →</span><b>' +
               (restLabel || "—") +
               "</b></div>" +
@@ -588,7 +672,7 @@
       })
       .join("");
 
-    const sum = (key) => p.days.reduce((a, d) => a + (d[key] != null ? d[key] : 0), 0);
+    const sum = (key) => ShiftCalc.sumActive(p.days, personMarks(p), key);
     const paintTotals = () => {
     $("detailTotals").innerHTML =
       '<div class="stat"><b>' +
@@ -626,19 +710,41 @@
     };
     paintTotals();
 
-    const canLask = state.dayCount === 21 && !!state.otEffective;
-    $("laskentaBox").hidden = !canLask;
-    if (canLask) {
-      $("laskentaInput").value = personN(p);
+    function paintLaskenta(keepInput) {
+      const canLask = state.dayCount === 21 && !!state.otEffective;
+      $("laskentaBox").hidden = !canLask;
+      if (!canLask) return;
+      const info = personNInfo(p);
+      const sick = sickCount(p);
+      const word = sick === 1 ? "sairaspäivä" : "sairaspäivää";
+      $("laskentaLabel").textContent =
+        "Laskentapäivät " + info.n + (sick ? " (" + sick + " " + word + ")" : "");
+      if (!keepInput) $("laskentaInput").value = info.n == null ? "" : info.n;
+      $("laskentaReset").hidden = !info.manual;
       $("laskentaLine").textContent = laskentaLine(p);
-      $("laskentaInput").oninput = () => {
-        const v = parseInt($("laskentaInput").value, 10);
-        if (!(v >= 1 && v <= 21)) return;
-        savePersonN(p, v);
-        $("laskentaLine").textContent = laskentaLine(p);
-        paintTotals();
-      };
     }
+    paintLaskenta(false);
+    $("laskentaInput").oninput = () => {
+      const v = parseInt($("laskentaInput").value, 10);
+      if (!(v >= 1 && v <= 21)) return;
+      savePersonN(p, v);
+      paintLaskenta(true);
+      paintTotals();
+    };
+    $("laskentaReset").onclick = () => {
+      clearPersonN(p);
+      paintLaskenta(false);
+      paintTotals();
+    };
+
+    document.querySelectorAll("#view-detail .sick-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const y = window.scrollY;
+        toggleSick(p, btn.dataset.date);
+        openDetail(p.id);
+        window.scrollTo(0, y);
+      });
+    });
 
     renderAlerts($("detailAlerts"), state, personId);
     show("detail");
