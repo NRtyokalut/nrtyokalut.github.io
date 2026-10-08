@@ -120,7 +120,7 @@
     } catch (e) {}
   }
   function isSickDay(p, d) {
-    return !!(d && d.start != null && personMarks(p)[d.date] === "sairas");
+    return !!(d && personMarks(p)[d.date] === "sairas");
   }
   function sickCount(p) {
     return ShiftCalc.sickDates(p.days, personMarks(p)).length;
@@ -558,15 +558,13 @@
         return (
           '<tr class="' + (sick ? "sick" : "") + '">' +
           "<td>" +
-          (d.start != null
-            ? '<button type="button" class="sick-btn' +
-              (sick ? " on" : "") +
-              '" data-date="' +
-              d.date +
-              '">' +
-              (sick ? "Sairasloma ✓" : "Sairas") +
-              "</button> "
-            : "") +
+          '<button type="button" class="sick-btn' +
+          (sick ? " on" : "") +
+          '" data-date="' +
+          d.date +
+          '">' +
+          (sick ? "Sairasloma ✓" : "Sairas") +
+          "</button> " +
           dateFi(d.date).slice(0, 5) +
           "</td>" +
           "<td>" +
@@ -619,15 +617,13 @@
           dateFi(d.date) +
           "</strong>" +
           (d.special ? '<span class="tag">' + d.special + "</span>" : "") +
-          (hasShift
-            ? '<button type="button" class="sick-btn' +
-              (sick ? " on" : "") +
-              '" data-date="' +
-              d.date +
-              '">' +
-              (sick ? "Sairasloma ✓" : "Sairas") +
-              "</button>"
-            : "") +
+          '<button type="button" class="sick-btn' +
+          (sick ? " on" : "") +
+          '" data-date="' +
+          d.date +
+          '">' +
+          (sick ? "Sairasloma ✓" : "Sairas") +
+          "</button>" +
           "</header>" +
           (hasShift
             ? '<div class="day-grid' +

@@ -314,6 +314,7 @@ button.file-btn { border: none; font: inherit; font-weight: 600; }
 }
 .sick-btn.on { background: #fde2ec; border-color: #e7a0b8; color: #8a2048; }
 .day-card.sick { background: #fde2ec; border-color: #f3c2d4; }
+.day-card.empty.sick { opacity: 1; }
 .day-grid.struck b { text-decoration: line-through; color: #8d7a84; }
 table.grid tr.sick td { background: #fde2ec !important; }
 table.grid td.struck { text-decoration: line-through; color: #8d7a84; }

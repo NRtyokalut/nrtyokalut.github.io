@@ -1219,10 +1219,10 @@
 
   /**
    * Day marks on top of the planned schedule (the Excel file itself is not changed).
-   * kind "sairas" = keskeytyspäivä: that planned shift's hours are left out and
-   * laskentapäivät drops by one. "loma" is reserved for the same store (not applied yet).
+   * kind "sairas" = keskeytyspäivä on any day of the jakso, shift or day off.
+   * A sick shift's hours are left out; a sick day off only lowers laskentapäivät.
+   * "loma" is reserved for the same store (not applied yet).
    * A later import may map Excel fill colours (green = loma, pink = sairasloma) into this.
-   * A mark on a day with no shift does not count.
    */
   const DAY_MARK_KINDS = ["sairas", "loma"];
 
@@ -1230,7 +1230,6 @@
     const set = {};
     if (!marks) return set;
     (days || []).forEach(function (d) {
-      if (d.start == null) return;
       if (marks[d.date] === "sairas") set[d.date] = true;
     });
     return set;
