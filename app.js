@@ -200,7 +200,7 @@
         badge +
         "</div>" +
         '<div class="card-hours">' +
-        "<div><span>Tunnit</span><b>" +
+        "<div><span>Kovat tunnit</span><b>" +
         fmt(hrs) +
         "</b></div>" +
         "<div><span>LM</span><b>" +
