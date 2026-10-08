@@ -166,6 +166,8 @@
       const hrs = sum("hrs");
       const me = sum("me");
       const company = sum("company");
+      const b25 = sum("b25");
+      const b100 = sum("b100");
       const badge =
         status === "bad"
           ? '<span class="pill bad">EI SALLITTU</span>'
@@ -202,6 +204,12 @@
         '<div class="card-hours">' +
         "<div><span>Kovat tunnit</span><b>" +
         fmt(hrs) +
+        "</b></div>" +
+        "<div><span>25 %</span><b>" +
+        fmt(b25) +
+        "</b></div>" +
+        "<div><span>100 %</span><b>" +
+        fmt(b100) +
         "</b></div>" +
         "<div><span>LM</span><b>" +
         fmt(me) +
