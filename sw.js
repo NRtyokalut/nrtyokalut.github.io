@@ -1,4 +1,4 @@
-const CACHE = "nrtyokalut-v25";
+const CACHE = "nrtyokalut-v26";
 const ASSETS = [
   "./",
   "./index.html",

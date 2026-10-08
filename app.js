@@ -212,7 +212,7 @@
         "<div><span>Yritys</span><b>" +
         fmt(company) +
         "</b></div>" +
-        "<div><span>Yö</span><b>" +
+        "<div><span>Yö h</span><b>" +
         fmt(night) +
         "</b></div>" +
         "<div><span>Lauantai h</span><b>" +
@@ -333,7 +333,7 @@
               "<div><span>Kovat tunnit</span><b>" +
               fmt(d.hrs) +
               "</b></div>" +
-              "<div><span>Yö</span><b>" +
+              "<div><span>Yö h</span><b>" +
               fmt(d.night) +
               "</b></div>" +
               "<div><span>LM</span><b>" +
@@ -370,7 +370,7 @@
       "</b><span>Kovat tunnit</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("night")) +
-      "</b><span>Yö</span></div>" +
+      "</b><span>Yö h</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("b25")) +
       "</b><span>Lauantai h</span></div>" +
