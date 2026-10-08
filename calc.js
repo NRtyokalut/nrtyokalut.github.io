@@ -205,8 +205,8 @@
    *   baseMin              normal target 114:45 → 50 % starts above this when no arkipyhät
    *   holidayReductionMin  each listed holiday on Mon–Fri inside the jakso lowers by 8 h
    *   limit100Min          100 % starts above 132:45 (never lowered)
-   *   lisatyoHolidays      lower the lisätyö threshold (= where 50 % starts; lisätyö is paid at 50 %)
-   *   ylityoHolidays       also lower the statutory ylityö threshold (shown for information)
+   *   lisatyoHolidays      lower the lisätyö threshold
+   *   ylityoHolidays       also lower the ylityö (50 %) threshold
    */
   const OT_CONFIG = {
     periodDays: 21,
@@ -267,8 +267,7 @@
    * Default thresholds for a jakso. Returns null unless the jakso length equals
    * config.periodDays (rules are only defined for the 3-week jakso).
    * start: Date or 'yyyy-mm-dd' / 'd.m.yyyy'.
-   *   lisaK = where 50 % starts (lowered lisätyö threshold), yliK = statutory ylityö threshold
-   *   (informational), sataK = where 100 % starts.
+   *   lisaK = lisätyö starts, yliK = ylityö 50 % starts, sataK = ylityö 100 % starts.
    */
   function overtimeThresholds(start, dayCount, config) {
     const cfg = config || OT_CONFIG;
@@ -294,18 +293,23 @@
   }
 
   /**
-   * Apply a user override {lisaK?, sataK?} (minutes) on top of defaults (may be null).
-   * Returns effective thresholds or null if either limit is still unknown.
+   * Apply a user override {lisaK?, yliK?, sataK?} (minutes) on top of defaults (may be null).
+   * Missing lisätyö start falls back to the default, or to the 50 % start when there is no default.
+   * Returns effective thresholds (lisaK ≤ yliK ≤ sataK) or null if 50 %/100 % are still unknown.
    */
   function applyOvertimeOverride(defaults, override) {
     const o = override || {};
-    const lisaK = o.lisaK != null ? o.lisaK : defaults ? defaults.lisaK : null;
-    const sataK = o.sataK != null ? o.sataK : defaults ? defaults.sataK : null;
-    if (lisaK == null || sataK == null) return null;
+    const pick = (k) => (o[k] != null ? o[k] : defaults ? defaults[k] : null);
+    const yliK = pick("yliK");
+    const sataK = pick("sataK");
+    if (yliK == null || sataK == null) return null;
+    let lisaK = pick("lisaK");
+    if (lisaK == null) lisaK = yliK;
     return Object.assign({}, defaults || { holidays: [] }, {
-      lisaK: lisaK,
-      sataK: Math.max(sataK, lisaK),
-      overridden: o.lisaK != null || o.sataK != null,
+      lisaK: Math.min(lisaK, yliK),
+      yliK: yliK,
+      sataK: Math.max(sataK, yliK),
+      overridden: o.lisaK != null || o.yliK != null || o.sataK != null,
     });
   }
 
@@ -324,15 +328,15 @@
   }
 
   /**
-   * Split LM total (minutes). Lisätyö is paid at the same 50 % as ylityö, so the 50 %
-   * band runs from the (possibly lowered) lisätyö threshold up to 132:45.
-   * Ylityö 100 % is everything above 132:45. null if no thresholds (non-21-day jakso).
+   * Split LM total (minutes) into lisätyö (lisaK → yliK), ylityö 50 % (yliK → 132:45)
+   * and ylityö 100 % (above 132:45). null if no thresholds (non-21-day jakso).
    */
   function overtimeSplit(lmMin, th) {
     if (!th) return null;
     const lm = lmMin || 0;
     return {
-      yli50: clampMin(lm, th.lisaK, th.sataK) - th.lisaK,
+      lisa: clampMin(lm, th.lisaK, th.yliK) - th.lisaK,
+      yli50: clampMin(lm, th.yliK, th.sataK) - th.yliK,
       yli100: Math.max(0, lm - th.sataK),
     };
   }

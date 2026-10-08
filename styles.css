@@ -227,10 +227,6 @@ table.grid tr:nth-child(even) td:first-child { background: #f8fbfd; }
   text-transform: uppercase;
 }
 .card-hours b { font-size: 0.95rem; }
-/* Overtime row: two cells, each half of the 3-col grid (6 sub-columns) */
-.card-hours { grid-template-columns: repeat(6, 1fr); }
-.card-hours div { grid-column: span 2; }
-.card-hours div.span-half { grid-column: span 3; }
 .ot-meta { margin: -4px 0 10px; color: var(--muted); font-size: 0.78rem; line-height: 1.4; }
 .ot-mod {
   display: inline-block; padding: 0 6px; border-radius: 999px;
@@ -242,7 +238,7 @@ table.grid tr:nth-child(even) td:first-child { background: #f8fbfd; }
 }
 .ot-editor {
   margin-top: 8px; padding: 10px; background: #fff; border: 1px solid var(--line);
-  border-radius: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+  border-radius: 10px; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px;
 }
 .ot-editor[hidden] { display: none; }
 .ot-editor label { display: flex; flex-direction: column; gap: 3px; font-size: 0.75rem; color: var(--muted); }

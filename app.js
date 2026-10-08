@@ -48,8 +48,15 @@
   function loadOtOverride() {
     if (!state) return null;
     try {
-      const o = JSON.parse(localStorage.getItem(OT_STORE_PREFIX + state.startDate) || "null");
-      if (!o || (o.lisaK == null && o.sataK == null)) return null;
+      const key = OT_STORE_PREFIX + state.startDate;
+      const o = JSON.parse(localStorage.getItem(key) || "null");
+      if (!o) return null;
+      if (o.v !== 2) {
+        // Old two-field format (before lisätyö was split out) — clear it
+        localStorage.removeItem(key);
+        return null;
+      }
+      if (o.lisaK == null && o.yliK == null && o.sataK == null) return null;
       return o;
     } catch (e) {
       return null;
@@ -59,8 +66,8 @@
   function saveOtOverride(o) {
     try {
       const key = OT_STORE_PREFIX + state.startDate;
-      if (!o || (o.lisaK == null && o.sataK == null)) localStorage.removeItem(key);
-      else localStorage.setItem(key, JSON.stringify(o));
+      if (!o || (o.lisaK == null && o.yliK == null && o.sataK == null)) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(Object.assign({ v: 2 }, o)));
     } catch (e) {
       /* storage unavailable: override just won't persist */
     }
@@ -86,7 +93,12 @@
     if (!th) {
       return "Ylityörajat: ei oletusta " + state.dayCount + " pv jaksolle";
     }
-    let t = "50 % yli " + fmt(th.lisaK) + " · 100 % yli " + fmt(th.sataK);
+    let t =
+      (th.lisaK < th.yliK ? "Lisätyö yli " + fmt(th.lisaK) + " · " : "") +
+      "50 % yli " +
+      fmt(th.yliK) +
+      " · 100 % yli " +
+      fmt(th.sataK);
     if (def && def.holidays.length) {
       t +=
         " · Arkipyhät: " +
@@ -110,10 +122,15 @@
       (th && th.overridden ? ' <span class="ot-mod">muutettu</span>' : "") +
       ' <button type="button" class="ot-edit-btn" id="otEditBtn">Muuta</button>' +
       '<div class="ot-editor" id="otEditor" hidden>' +
-      '<label>50 % alkaa<input id="ot50" inputmode="decimal" autocomplete="off" placeholder="' +
+      '<label>Lisätyö alkaa<input id="otLisa" inputmode="decimal" autocomplete="off" placeholder="' +
       ph("lisaK") +
       '" value="' +
       val("lisaK") +
+      '"></label>' +
+      '<label>50 % alkaa<input id="ot50" inputmode="decimal" autocomplete="off" placeholder="' +
+      ph("yliK") +
+      '" value="' +
+      val("yliK") +
       '"></label>' +
       '<label>100 % alkaa<input id="ot100" inputmode="decimal" autocomplete="off" placeholder="' +
       ph("sataK") +
@@ -126,14 +143,16 @@
       "</div>" +
       '<p class="ot-err" id="otErr" hidden></p>' +
       '<p class="ot-note">' +
-      (def ? "Tyhjä kenttä = oletus. " : "Anna molemmat rajat (h:mm). ") +
+      (def
+        ? "Tyhjä kenttä = oletus. "
+        : "Anna 50 % ja 100 % rajat (h:mm); tyhjä lisätyö = sama kuin 50 %. ") +
       "Tallentuu vain tähän laitteeseen.</p>" +
       "</div>";
 
     $("otEditBtn").addEventListener("click", () => {
       const ed = $("otEditor");
       ed.hidden = !ed.hidden;
-      if (!ed.hidden) $("ot50").focus();
+      if (!ed.hidden) $("otLisa").focus();
     });
     $("otReset").addEventListener("click", () => {
       saveOtOverride(null);
@@ -144,19 +163,23 @@
         $("otErr").textContent = msg;
         $("otErr").hidden = false;
       };
-      const raw50 = $("ot50").value.trim();
-      const raw100 = $("ot100").value.trim();
-      const v50 = raw50 ? ShiftCalc.parseHM(raw50) : null;
-      const v100 = raw100 ? ShiftCalc.parseHM(raw100) : null;
-      if ((raw50 && v50 == null) || (raw100 && v100 == null)) return err("Anna aika muodossa h:mm, esim. 106:45.");
-      const o = {
-        lisaK: def && v50 === def.lisaK ? null : v50,
-        sataK: def && v100 === def.sataK ? null : v100,
+      const read = (id) => {
+        const raw = $(id).value.trim();
+        return { raw: raw, v: raw ? ShiftCalc.parseHM(raw) : null };
       };
-      const eff = ShiftCalc.applyOvertimeOverride(def, o);
-      if (!def && !eff && (v50 != null || v100 != null)) return err("Anna molemmat rajat.");
-      const e50 = v50 != null ? v50 : def ? def.lisaK : null;
-      const e100 = v100 != null ? v100 : def ? def.sataK : null;
+      const fL = read("otLisa"),
+        f50 = read("ot50"),
+        f100 = read("ot100");
+      if ([fL, f50, f100].some((f) => f.raw && f.v == null)) return err("Anna aika muodossa h:mm, esim. 106:45.");
+      const same = (v, k) => (def && v === def[k] ? null : v);
+      const o = { lisaK: same(fL.v, "lisaK"), yliK: same(f50.v, "yliK"), sataK: same(f100.v, "sataK") };
+      const dk = (k) => (def ? def[k] : null);
+      const e50 = f50.v != null ? f50.v : dk("yliK");
+      const e100 = f100.v != null ? f100.v : dk("sataK");
+      const eL = fL.v != null ? fL.v : def ? def.lisaK : e50;
+      if (!def && (e50 == null || e100 == null) && (fL.v != null || f50.v != null || f100.v != null))
+        return err("Anna ainakin 50 % ja 100 % rajat.");
+      if (eL != null && e50 != null && eL > e50) return err("Lisätyö ei voi alkaa 50 % rajan jälkeen.");
       if (e50 != null && e100 != null && e100 < e50) return err("100 % raja ei voi olla pienempi kuin 50 % raja.");
       saveOtOverride(o);
       recalcOvertime();
@@ -351,10 +374,13 @@
         "<div><span>Pyhä h</span><b>" +
         fmt(b100) +
         "</b></div>" +
-        '<div class="span-half"><span>Ylityö 50 %</span><b>' +
+        "<div><span>Lisätyö h</span><b>" +
+        fmtOt(personOt(p), "lisa") +
+        "</b></div>" +
+        "<div><span>Ylityö 50 %</span><b>" +
         fmtOt(personOt(p), "yli50") +
         "</b></div>" +
-        '<div class="span-half"><span>Ylityö 100 %</span><b>' +
+        "<div><span>Ylityö 100 %</span><b>" +
         fmtOt(personOt(p), "yli100") +
         "</b></div>" +
         "</div>" +
@@ -525,6 +551,9 @@
       '<div class="stat"><b>' +
       fmt(sum("company")) +
       "</b><span>Yritys yht.</span></div>" +
+      '<div class="stat"><b>' +
+      fmtOt(personOt(p), "lisa") +
+      "</b><span>Lisätyö h</span></div>" +
       '<div class="stat"><b>' +
       fmtOt(personOt(p), "yli50") +
       "</b><span>Ylityö 50 %</span></div>" +
