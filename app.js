@@ -78,13 +78,66 @@
     return ShiftCalc.applyOvertimeOverride(state.overtime, loadOtOverride());
   }
 
+  // Keskeytynyt jakso: laskentapäivät per person, on this device only.
+  const LASK_PREFIX = "nrtyokalut.laskenta.";
+  function laskKey(p) {
+    return p.col + ":" + p.name;
+  }
+  function loadLaskMap() {
+    if (!state) return {};
+    try {
+      return JSON.parse(localStorage.getItem(LASK_PREFIX + state.startDate) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function personN(p) {
+    const v = parseInt(loadLaskMap()[laskKey(p)], 10);
+    return v >= 1 && v <= 21 ? v : 21;
+  }
+  function savePersonN(p, n) {
+    const map = loadLaskMap();
+    if (n === 21) delete map[laskKey(p)];
+    else map[laskKey(p)] = n;
+    try {
+      const key = LASK_PREFIX + state.startDate;
+      if (!Object.keys(map).length) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(map));
+    } catch (e) {}
+  }
   function personOt(p) {
-    return ShiftCalc.overtimeSplit(p.lmTotal, state.otEffective);
+    if (!state.otEffective) return null;
+    if (state.dayCount !== 21) return ShiftCalc.overtimeSplit(p.lmTotal, state.otEffective);
+    return ShiftCalc.interruptedSplit(p.lmTotal, state.otEffective, personN(p));
+  }
+  function otNote(ot) {
+    if (!ot) return "";
+    if (ot.unsupported === "override") return "muutetut rajat: tarkista käsin";
+    if (ot.unsupported === "table") return "ei taulukossa";
+    const bits = [];
+    if (ot.capLisaHit && ot.norms) bits.push("Lisätyö katto " + ot.norms.lisaCapH + " h");
+    if (ot.cap50Hit && ot.norms) bits.push("50 % katto " + ot.norms.cap50H + " h");
+    return bits.join(" · ");
+  }
+  /** Threshold line for this person's N, e.g. 'Taulukko 1 · 14 pv: 50 % yli 76:30 (enint. 12 h) · …' */
+  function laskentaLine(p) {
+    const n = personN(p);
+    const th = state.otEffective;
+    if (!th) return "";
+    if (th.overridden && n < 21) return "muutetut rajat: tarkista käsin";
+    if (th.overridden) return "21 pv · muutetut rajat käytössä";
+    const norms = ShiftCalc.interruptedNorms(th.lisaK, th.yliK, n);
+    if (!norms) return "ei taulukossa";
+    let t = "Taulukko " + norms.table + " · " + n + " pv: ";
+    if (!norms.noLisa) t += "Lisätyö yli " + fmt(norms.lisaK) + " (enint. " + norms.lisaCapH + " h) · ";
+    t += "50 % yli " + fmt(norms.yliK) + " (enint. " + norms.cap50H + " h) · 100 % yli " + fmt(norms.k100);
+    return t;
   }
 
-  /** Overtime value or "—" when the jakso has no thresholds */
+  /** Overtime value or "—" when unknown / not in the table */
   function fmtOt(ot, key) {
-    return ot ? fmt(ot[key]) : "—";
+    if (!ot || ot[key] == null) return "—";
+    return fmt(ot[key]);
   }
 
   /** Short threshold text, e.g. '50 % yli 114:45 · 100 % yli 132:45 · Arkipyhät: …' */
@@ -384,6 +437,10 @@
         fmtOt(personOt(p), "yli100") +
         "</b></div>" +
         "</div>" +
+        (state.dayCount === 21 && personN(p) !== 21
+          ? '<p class="card-break">Keskeytynyt · ' + personN(p) + " pv</p>"
+          : "") +
+        (otNote(personOt(p)) ? '<p class="card-ot-note">' + otNote(personOt(p)) + "</p>" : "") +
         problemList +
         '<span class="card-open">Avaa vuorotaulu →</span>' +
         "</button>"
@@ -532,6 +589,7 @@
       .join("");
 
     const sum = (key) => p.days.reduce((a, d) => a + (d[key] != null ? d[key] : 0), 0);
+    const paintTotals = () => {
     $("detailTotals").innerHTML =
       '<div class="stat"><b>' +
       fmt(sum("hrs")) +
@@ -563,7 +621,24 @@
       '<p class="ot-meta totals-note">' +
       overtimeText(state.otEffective) +
       (state.otEffective && state.otEffective.overridden ? ' <span class="ot-mod">muutettu</span>' : "") +
-      "</p>";
+      "</p>" +
+      (otNote(personOt(p)) ? '<p class="ot-meta totals-note">' + otNote(personOt(p)) + "</p>" : "");
+    };
+    paintTotals();
+
+    const canLask = state.dayCount === 21 && !!state.otEffective;
+    $("laskentaBox").hidden = !canLask;
+    if (canLask) {
+      $("laskentaInput").value = personN(p);
+      $("laskentaLine").textContent = laskentaLine(p);
+      $("laskentaInput").oninput = () => {
+        const v = parseInt($("laskentaInput").value, 10);
+        if (!(v >= 1 && v <= 21)) return;
+        savePersonN(p, v);
+        $("laskentaLine").textContent = laskentaLine(p);
+        paintTotals();
+      };
+    }
 
     renderAlerts($("detailAlerts"), state, personId);
     show("detail");
@@ -632,7 +707,7 @@
     pendingBuf = null;
     show("home");
   });
-  $("btnBack").addEventListener("click", () => show("overview"));
+  $("btnBack").addEventListener("click", () => renderOverview());
 
   $("startDateOk").addEventListener("click", () => {
     const v = $("startDateInput").value;

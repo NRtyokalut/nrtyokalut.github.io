@@ -416,7 +416,181 @@
     };
   }
 
-  /** Interval overlap length (same logic as Matching R15..) */
+  /**
+   * Keskeytynyt työjakso: 'Suhteellisten työtuntinormien taulukot' 1 and 2,
+   * embedded exactly as printed (N = 1..21). Not computed by formula.
+   * Columns: II 50 % threshold, III 100 % threshold, IV max whole hours at 50 %,
+   * then (lisätyö threshold, max whole lisätyö hours) pairs.
+   *   Table 1 lisätyö columns: 106:45, 98:45, 90:45, 82:45 (ylityö base 114:45)
+   *   Table 2 lisätyö columns: 98:45, 90:45, 82:45, 74:45 (ylityö base 106:45)
+   */
+  const INT_TABLE_SRC = {
+    1: [
+      "1 | 5 t 28 min | 6 t 19 min | 1 | 5 t 05 min | 0 | 4 t 42 min | 1 | 4 t 19 min | 1 | 3 t 56 min | 2",
+      "2 | 10 t 56 min | 12 t 39 min | 2 | 10 t 10 min | 1 | 9 t 24 min | 2 | 8 t 39 min | 2 | 7 t 53 min | 3",
+      "3 | 16 t 24 min | 18 t 58 min | 3 | 15 t 15 min | 1 | 14 t 06 min | 2 | 12 t 58 min | 3 | 11 t 49 min | 5",
+      "4 | 21 t 51 min | 25 t 17 min | 3 | 20 t 20 min | 2 | 18 t 49 min | 3 | 17 t 17 min | 5 | 15 t 46 min | 6",
+      "5 | 27 t 19 min | 31 t 36 min | 4 | 25 t 25 min | 2 | 23 t 31 min | 4 | 21 t 36 min | 6 | 19 t 42 min | 8",
+      "6 | 32 t 47 min | 37 t 56 min | 5 | 30 t 30 min | 2 | 28 t 13 min | 5 | 25 t 56 min | 7 | 23 t 39 min | 9",
+      "7 | 38 t 15 min | 44 t 15 min | 6 | 35 t 35 min | 3 | 32 t 55 min | 5 | 30 t 15 min | 8 | 27 t 35 min | 11",
+      "8 | 43 t 43 min | 50 t 34 min | 7 | 40 t 40 min | 3 | 37 t 37 min | 6 | 34 t 34 min | 9 | 31 t 31 min | 12",
+      "9 | 49 t 11 min | 56 t 54 min | 8 | 45 t 45 min | 3 | 42 t 19 min | 7 | 38 t 54 min | 10 | 35 t 28 min | 14",
+      "10 | 54 t 39 min | 63 t 13 min | 9 | 50 t 50 min | 4 | 47 t 01 min | 8 | 43 t 13 min | 11 | 39 t 24 min | 15",
+      "11 | 60 t 06 min | 69 t 32 min | 9 | 55 t 55 min | 4 | 51 t 44 min | 8 | 47 t 32 min | 13 | 43 t 21 min | 17",
+      "12 | 65 t 34 min | 75 t 51 min | 10 | 61 t 00 min | 5 | 56 t 26 min | 9 | 51 t 51 min | 14 | 47 t 17 min | 18",
+      "13 | 71 t 02 min | 82 t 11 min | 11 | 66 t 05 min | 5 | 61 t 08 min | 10 | 56 t 11 min | 15 | 51 t 14 min | 20",
+      "14 | 76 t 30 min | 88 t 30 min | 12 | 71 t 10 min | 5 | 65 t 50 min | 11 | 60 t 30 min | 16 | 55 t 10 min | 21",
+      "15 | 81 t 58 min | 94 t 49 min | 13 | 76 t 15 min | 6 | 70 t 32 min | 11 | 64 t 49 min | 17 | 59 t 06 min | 23",
+      "16 | 87 t 26 min | 101 t 09 min | 14 | 81 t 20 min | 6 | 75 t 14 min | 12 | 69 t 09 min | 18 | 63 t 03 min | 24",
+      "17 | 92 t 54 min | 107 t 28 min | 15 | 86 t 25 min | 6 | 79 t 56 min | 13 | 73 t 28 min | 19 | 66 t 59 min | 26",
+      "18 | 98 t 21 min | 113 t 47 min | 15 | 91 t 30 min | 7 | 84 t 39 min | 14 | 77 t 47 min | 21 | 70 t 56 min | 27",
+      "19 | 103 t 49 min | 120 t 06 min | 16 | 96 t 35 min | 7 | 89 t 21 min | 14 | 82 t 06 min | 22 | 74 t 52 min | 29",
+      "20 | 109 t 17 min | 126 t 26 min | 17 | 101 t 40 min | 8 | 94 t 03 min | 15 | 86 t 26 min | 23 | 78 t 49 min | 30",
+      "21 | 114 t 45 min | 132 t 45 min | 18 | 106 t 45 min | 8 | 98 t 45 min | 16 | 90 t 45 min | 24 | 82 t 45 min | 32",
+    ],
+    2: [
+      "1 | 5 t 05 min | 6 t 19 min | 1 | 4 t 42 min | 0 | 4 t 19 min | 1 | 3 t 56 min | 1 | 3 t 34 min | 2",
+      "2 | 10 t 10 min | 12 t 39 min | 2 | 9 t 24 min | 1 | 8 t 39 min | 2 | 7 t 53 min | 2 | 7 t 07 min | 3",
+      "3 | 15 t 15 min | 18 t 58 min | 4 | 14 t 06 min | 1 | 12 t 58 min | 2 | 11 t 49 min | 3 | 10 t 41 min | 5",
+      "4 | 20 t 20 min | 25 t 17 min | 5 | 18 t 49 min | 2 | 17 t 17 min | 3 | 15 t 46 min | 5 | 14 t 14 min | 6",
+      "5 | 25 t 25 min | 31 t 36 min | 6 | 23 t 31 min | 2 | 21 t 36 min | 4 | 19 t 42 min | 6 | 17 t 48 min | 8",
+      "6 | 30 t 30 min | 37 t 56 min | 7 | 28 t 13 min | 2 | 25 t 56 min | 5 | 23 t 39 min | 7 | 21 t 21 min | 9",
+      "7 | 35 t 35 min | 44 t 15 min | 9 | 32 t 55 min | 3 | 30 t 15 min | 5 | 27 t 35 min | 8 | 24 t 55 min | 11",
+      "8 | 40 t 40 min | 50 t 34 min | 10 | 37 t 37 min | 3 | 34 t 34 min | 6 | 31 t 31 min | 9 | 28 t 29 min | 12",
+      "9 | 45 t 45 min | 56 t 54 min | 11 | 42 t 19 min | 3 | 38 t 54 min | 7 | 35 t 28 min | 10 | 32 t 02 min | 14",
+      "10 | 50 t 50 min | 63 t 13 min | 12 | 47 t 01 min | 4 | 43 t 13 min | 8 | 39 t 24 min | 11 | 35 t 36 min | 15",
+      "11 | 55 t 55 min | 69 t 32 min | 14 | 51 t 44 min | 4 | 47 t 32 min | 8 | 43 t 21 min | 13 | 39 t 09 min | 17",
+      "12 | 61 t 00 min | 75 t 51 min | 15 | 56 t 26 min | 5 | 51 t 51 min | 9 | 47 t 17 min | 14 | 42 t 43 min | 18",
+      "13 | 66 t 05 min | 82 t 11 min | 16 | 61 t 08 min | 5 | 56 t 11 min | 10 | 51 t 14 min | 15 | 46 t 16 min | 20",
+      "14 | 71 t 10 min | 88 t 30 min | 17 | 65 t 50 min | 5 | 60 t 30 min | 11 | 55 t 10 min | 16 | 49 t 50 min | 21",
+      "15 | 76 t 15 min | 94 t 49 min | 19 | 70 t 32 min | 6 | 64 t 49 min | 11 | 59 t 06 min | 17 | 53 t 24 min | 23",
+      "16 | 81 t 20 min | 101 t 09 min | 20 | 75 t 14 min | 6 | 69 t 09 min | 12 | 63 t 03 min | 18 | 56 t 57 min | 24",
+      "17 | 86 t 25 min | 107 t 28 min | 21 | 79 t 56 min | 6 | 73 t 28 min | 13 | 66 t 59 min | 19 | 60 t 31 min | 26",
+      "18 | 91 t 30 min | 113 t 47 min | 22 | 84 t 39 min | 7 | 77 t 47 min | 14 | 70 t 56 min | 21 | 64 t 04 min | 27",
+      "19 | 96 t 35 min | 120 t 06 min | 24 | 89 t 21 min | 7 | 82 t 06 min | 14 | 74 t 52 min | 22 | 67 t 38 min | 29",
+      "20 | 101 t 40 min | 126 t 26 min | 25 | 94 t 03 min | 8 | 86 t 26 min | 15 | 78 t 49 min | 23 | 71 t 11 min | 30",
+      "21 | 106 t 45 min | 132 t 45 min | 26 | 98 t 45 min | 8 | 90 t 45 min | 16 | 82 t 45 min | 24 | 74 t 45 min | 32",
+    ],
+  };
+  const INT_LISA_KEYS = {
+    1: [106 * 60 + 45, 98 * 60 + 45, 90 * 60 + 45, 82 * 60 + 45],
+    2: [98 * 60 + 45, 90 * 60 + 45, 82 * 60 + 45, 74 * 60 + 45],
+  };
+
+  function parsePrintedCell(cell) {
+    const t = cell.trim();
+    if (/^\d+$/.test(t)) return { capH: +t };
+    const m = t.match(/^(\d+)\s*t\s*(\d+)\s*min$/);
+    if (!m) throw new Error("Bad table cell: " + cell);
+    return { min: +m[1] * 60 + +m[2] };
+  }
+
+  function buildIntTables() {
+    const out = { 1: [], 2: [] };
+    [1, 2].forEach(function (table) {
+      INT_TABLE_SRC[table].forEach(function (line) {
+        const c = line.split("|").map(parsePrintedCell);
+        if (c.length !== 12) throw new Error("row width " + c.length);
+        const lisa = [];
+        for (let i = 0; i < 4; i++) {
+          lisa.push({ k: c[4 + i * 2].min, capH: c[5 + i * 2].capH });
+        }
+        out[table][+line.split("|")[0].trim()] = {
+          yli50: c[1].min,
+          k100: c[2].min,
+          cap50H: c[3].capH,
+          lisa: lisa,
+        };
+      });
+    });
+    return out;
+  }
+  const INT_TABLES = buildIntTables();
+
+  /**
+   * Norms for N laskentapäiviä given the full jakso's lisäK and yliK (minutes).
+   * null when the pair is not in the printed tables (caller shows 'ei taulukossa').
+   * When lisäK === yliK there is no lisätyö band (lisaK/lisaCap null).
+   */
+  function interruptedNorms(lisaK, yliK, n) {
+    const table = yliK === 114 * 60 + 45 ? 1 : yliK === 106 * 60 + 45 ? 2 : 0;
+    if (!table || n < 1 || n > 21) return null;
+    const row = INT_TABLES[table][n];
+    if (!row) return null;
+    const noLisa = lisaK === yliK;
+    let lisa = null;
+    if (!noLisa) {
+      const idx = INT_LISA_KEYS[table].indexOf(lisaK);
+      if (idx < 0) return null;
+      lisa = row.lisa[idx];
+    }
+    return {
+      table: table,
+      n: n,
+      yliK: row.yli50,
+      k100: row.k100,
+      cap50: row.cap50H * 60,
+      cap50H: row.cap50H,
+      lisaK: lisa ? lisa.k : null,
+      lisaCap: lisa ? lisa.capH * 60 : null,
+      lisaCapH: lisa ? lisa.capH : null,
+      noLisa: noLisa,
+    };
+  }
+
+  /**
+   * Lisätyö / 50 % / 100 % for a person with N laskentapäiviä.
+   * N = 21 uses the ordinary split (caps equal the band widths, overrides included).
+   * An active Muuta override is not scaled: N < 21 → unsupported 'override'.
+   * Unlisted thresholds → unsupported 'table'.
+   * Caps cut the paid hours; time between a cap and the next threshold is paid as neither.
+   */
+  function interruptedSplit(lmMin, th, n) {
+    if (!th) return null;
+    n = n || 21;
+    if (n === 21) {
+      const s = overtimeSplit(lmMin, th);
+      return {
+        lisa: s.lisa,
+        yli50: s.yli50,
+        yli100: s.yli100,
+        n: 21,
+        unsupported: null,
+        cap50Hit: false,
+        capLisaHit: false,
+        norms: th.overridden ? null : interruptedNorms(th.lisaK, th.yliK, 21),
+      };
+    }
+    if (th.overridden) {
+      return { lisa: null, yli50: null, yli100: null, n: n, unsupported: "override", cap50Hit: false, capLisaHit: false, norms: null };
+    }
+    const norms = interruptedNorms(th.lisaK, th.yliK, n);
+    if (!norms) {
+      return { lisa: null, yli50: null, yli100: null, n: n, unsupported: "table", cap50Hit: false, capLisaHit: false, norms: null };
+    }
+    const lm = lmMin || 0;
+    let lisa = 0;
+    let capLisaHit = false;
+    if (!norms.noLisa) {
+      const raw = clampMin(lm, norms.lisaK, norms.yliK) - norms.lisaK;
+      capLisaHit = raw > norms.lisaCap;
+      lisa = Math.min(norms.lisaCap, raw);
+    }
+    const raw50 = clampMin(lm, norms.yliK, norms.k100) - norms.yliK;
+    const cap50Hit = raw50 > norms.cap50;
+    return {
+      lisa: lisa,
+      yli50: Math.min(norms.cap50, raw50),
+      yli100: Math.max(0, lm - norms.k100),
+      n: n,
+      unsupported: null,
+      cap50Hit: cap50Hit,
+      capLisaHit: capLisaHit,
+      norms: norms,
+    };
+  }
+
+    /** Interval overlap length (same logic as Matching R15..) */
   function segOverlap(start, end, segStart, segEnd) {
     // Mirror nested IFs exactly
     if (start < segStart && start < segEnd && end > segStart && end < segEnd) return end - segStart;
@@ -1078,6 +1252,9 @@
     overtimeThresholds,
     applyOvertimeOverride,
     overtimeSplit,
+    INT_TABLES,
+    interruptedNorms,
+    interruptedSplit,
     parseHM,
     formatHM,
     summarize,
