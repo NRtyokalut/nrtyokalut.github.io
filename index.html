@@ -46,6 +46,34 @@
         <p id="startDateErr" class="start-date-err" hidden></p>
       </div>
 
+      <details class="card guide">
+        <summary>Käyttöohjeet</summary>
+        <h3>1. Avaa jakso</h3>
+        <p>Paina <b>Valitse .xlsx-tiedosto</b> ja valitse jakso-lomake. Sovellus etsii jakson alkupäivän ”Jakso”-solun alta. Jos sitä ei löydy, sovellus pyytää antamaan päivän itse.</p>
+        <h3>2. Etusivu</h3>
+        <p>Jokaisella henkilöllä on oma kortti:</p>
+        <ul>
+          <li><b>Kovat tunnit</b>: tehdyt tunnit vuorojen mukaan.</li>
+          <li><b>LM</b>: lomakkeen tunnit yhteensä. Ylityöt lasketaan tästä.</li>
+          <li><b>Yritys</b>: yrityksen laskemat tunnit lomakkeella.</li>
+          <li><b>Yö h, Lauantai h, Pyhä h</b>: lisiin oikeuttavat tunnit.</li>
+          <li><b>Lisätyö h, Ylityö 50 %, Ylityö 100 %</b>: jakson rajojen ylittävät tunnit.</li>
+        </ul>
+        <p><span class="pill ok">OK</span> vuorojen väli vähintään 10 h. <span class="pill md">TARKISTA</span> väli 7–10 h tai LM ja Yritys eivät täsmää lomakkeella. <span class="pill bad">EI SALLITTU</span> väli alle 7 h.</p>
+        <h3>3. Ylityörajat</h3>
+        <p>Rajat lasketaan automaattisesti jakson arkipyhien mukaan. Jos rajat ovat eri, paina <b>Muuta</b> ja syötä oikeat. <b>Palauta oletus</b> palauttaa lasketut rajat.</p>
+        <h3>4. Henkilön vuorotaulu</h3>
+        <p>Avaa vuorotaulu painamalla henkilön korttia.</p>
+        <ul>
+          <li><b>Laskentapäivät</b> (oletus 21): keskeytyneen jakson ylityörajat lasketaan tämän mukaan.</li>
+          <li><b>LM-ruutu</b>: luottamusmiehen +8 h jaksossa. Lisätään sekä LM- että Yritys-tunteihin, ja ruutu muistetaan nimen mukaan seuraavissa jaksoissa.</li>
+          <li><b>Keskeytyspäivä</b>: sairaus tai loma, myös vapaapäivänä. Päivän tunnit poistuvat ja laskentapäivät vähenevät yhdellä.</li>
+          <li><b>+ Lisävuoro</b>: anna alku- ja loppuaika. Lisävuoro lasketaan tunteihin ja ylitöihin.</li>
+        </ul>
+        <h3>5. Tietojen tallennus</h3>
+        <p>Kaikki merkinnät tallentuvat vain tähän puhelimeen, eikä niistä tehdä varmuuskopiota. Jos poistat sovelluksen Koti-valikosta tai tyhjennät Safarin tiedot, merkinnät häviävät.</p>
+      </details>
+
       <div class="card tips">
         <p class="hint small">iPhone: Jaa → Lisää Koti-valikkoon. Windows: Chrome/Edge → Asenna sovellus.</p>
       </div>

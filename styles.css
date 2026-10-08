@@ -365,3 +365,12 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
   display: inline-block; margin-left: 6px; font-size: 0.68rem; font-weight: 800;
   background: #e7f1fb; color: #0B3D5C; border-radius: 999px; padding: 1px 6px; vertical-align: 2px;
 }
+
+.guide summary { font-weight: 700; font-size: 1.05rem; cursor: pointer; color: var(--brand); list-style: none; }
+.guide summary::-webkit-details-marker { display: none; }
+.guide summary::after { content: "▾"; float: right; transition: transform .2s; }
+.guide[open] summary::after { transform: rotate(180deg); }
+.guide h3 { font-size: 0.95rem; margin: 16px 0 4px; color: var(--brand); }
+.guide p, .guide li { color: var(--ink); font-size: 0.9rem; line-height: 1.45; margin: 4px 0; }
+.guide ul { margin: 4px 0; padding-left: 1.1rem; }
+.guide .pill { font-size: 0.72rem; }
