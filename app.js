@@ -216,7 +216,33 @@
     return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap);
   }
   function activeLm(p) {
-    return sumPerson(p, "me");
+    return sumPerson(p, "me") + ShiftCalc.stewardBonus(isSteward(p));
+  }
+  function loadStewardMap() {
+    try {
+      return JSON.parse(localStorage.getItem(ShiftCalc.STEWARD_STORAGE_KEY) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function isSteward(p) {
+    return !!loadStewardMap()[p.name];
+  }
+  function setSteward(p, on) {
+    const next = ShiftCalc.stewardMapSet(loadStewardMap(), p.name, on);
+    try {
+      const key = ShiftCalc.STEWARD_STORAGE_KEY;
+      if (!Object.keys(next).length) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(next));
+    } catch (e) {}
+  }
+  function stewardLabel() {
+    const m = ShiftCalc.stewardBonus(true);
+    const h = m % 60 === 0 ? String(m / 60) : ShiftCalc.formatHM(m);
+    return "LM (+" + h + " h / jakso)";
+  }
+  function stewardLine() {
+    return "LM-tunnit +" + fmt(ShiftCalc.stewardBonus(true));
   }
   function personOt(p) {
     if (!state.otEffective) return null;
@@ -545,6 +571,7 @@
         '<div class="person-card-top">' +
         "<div><h3>" +
         p.name +
+        (isSteward(p) ? ' <span class="lm-tag">LM</span>' : "") +
         "</h3>" +
         '<p class="card-meta">' +
         p.shiftCount +
@@ -556,7 +583,7 @@
         fmt(hrs) +
         "</b></div>" +
         "<div><span>LM</span><b>" +
-        fmt(me) +
+        fmt(activeLm(p)) +
         "</b></div>" +
         "<div><span>Yritys</span><b>" +
         fmt(company) +
@@ -814,7 +841,7 @@
       fmt(sum("b100")) +
       "</b><span>Pyhä h</span></div>" +
       '<div class="stat"><b>' +
-      fmt(sum("me")) +
+      fmt(activeLm(p)) +
       "</b><span>LM yht.</span></div>" +
       '<div class="stat"><b>' +
       fmt(sum("company")) +
@@ -832,6 +859,7 @@
       overtimeText(state.otEffective) +
       (state.otEffective && state.otEffective.overridden ? ' <span class="ot-mod">muutettu</span>' : "") +
       "</p>" +
+      (isSteward(p) ? '<p class="ot-meta totals-note">' + stewardLine() + "</p>" : "") +
       (otNote(personOt(p)) ? '<p class="ot-meta totals-note">' + otNote(personOt(p)) + "</p>" : "");
     };
     paintTotals();
@@ -850,6 +878,12 @@
       $("laskentaLine").textContent = laskentaLine(p);
     }
     paintLaskenta(false);
+    $("lmCheckLabel").textContent = stewardLabel();
+    $("lmCheck").checked = isSteward(p);
+    $("lmCheck").onchange = () => {
+      setSteward(p, $("lmCheck").checked);
+      paintTotals();
+    };
     $("laskentaInput").oninput = () => {
       const v = parseInt($("laskentaInput").value, 10);
       if (!(v >= 1 && v <= 21)) return;

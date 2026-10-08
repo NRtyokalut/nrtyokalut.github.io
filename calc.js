@@ -301,6 +301,8 @@
       "itsenaisyyspaiva",
     ],
     ylityoHolidays: ["uudenvuodenpaiva", "vappu", "itsenaisyyspaiva"],
+    // Luottamusmies: fixed hours added to LM once per jakso. Not scaled for a short jakso.
+    stewardMin: 8 * 60,
   };
 
   /** Holiday id → { name, date(year) }. Easter computed algorithmically (works for any year). */
@@ -344,6 +346,26 @@
    * start: Date or 'yyyy-mm-dd' / 'd.m.yyyy'.
    *   lisaK = lisätyö starts, yliK = ylityö 50 % starts, sataK = ylityö 100 % starts.
    */
+  /** Minutes added to LM when the person is luottamusmies. 0 if the flag is off. */
+  function stewardBonus(on, config) {
+    if (!on) return 0;
+    const cfg = config || OT_CONFIG;
+    return cfg.stewardMin || 0;
+  }
+
+  /**
+   * Steward flags are stored by person name, not by jakso. map is { [name]: 1 }.
+   * Returns a new map.
+   */
+  function stewardMapSet(map, name, on) {
+    const next = Object.assign({}, map || {});
+    const key = String(name || "");
+    if (!key) return next;
+    if (on) next[key] = 1;
+    else delete next[key];
+    return next;
+  }
+
   function overtimeThresholds(start, dayCount, config) {
     const cfg = config || OT_CONFIG;
     const s = toDate(start);
@@ -1420,6 +1442,9 @@
     holidayName,
     easterSunday,
     OT_CONFIG,
+    STEWARD_STORAGE_KEY: "nrtyokalut.lm",
+    stewardBonus,
+    stewardMapSet,
     overtimeHolidaysForYear,
     overtimeThresholds,
     applyOvertimeOverride,

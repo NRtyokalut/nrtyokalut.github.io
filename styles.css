@@ -352,3 +352,16 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .extra-err { color: var(--bad-ink); font-weight: 700; margin: 6px 0 0; font-size: 0.8rem; }
 .card-extra { margin: 0 0 8px; font-size: 0.78rem; font-weight: 700; color: #0B3D5C; }
 .day-card.has-extra { background: #f4f9fd; }
+
+.detail-tools { display: flex; flex-wrap: wrap; gap: 8px; align-items: stretch; margin: 0 0 12px; }
+.detail-tools .laskenta-box { flex: 1 1 220px; margin: 0; }
+.lm-check {
+  display: flex; align-items: center; gap: 8px; margin: 0;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px;
+  padding: 10px 12px; font-weight: 700; font-size: 0.92rem; cursor: pointer;
+}
+.lm-check input { width: 1.15rem; height: 1.15rem; accent-color: var(--brand); }
+.lm-tag {
+  display: inline-block; margin-left: 6px; font-size: 0.68rem; font-weight: 800;
+  background: #e7f1fb; color: #0B3D5C; border-radius: 999px; padding: 1px 6px; vertical-align: 2px;
+}
