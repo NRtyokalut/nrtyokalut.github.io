@@ -1,4 +1,4 @@
-const CACHE = "nrvuorotaulu-v19";
+const CACHE = "nrtyokalut-v20";
 const ASSETS = [
   "./",
   "./index.html",
