@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="fi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B3D5C" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Vuorotarkastus" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <title>Vuorotaulun tarkastus</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" width="36" height="36" />
+      <div>
+        <h1>Vuorotaulun tarkastus</h1>
+        <p class="sub">Tiedot pysyvät laitteellasi<br/>Toimii offlinessa</p>
+      </div>
+    </div>
+  </header>
+
+  <main id="app">
+    <section id="view-home" class="view">
+      <div class="card">
+        <h2>Valitse jakso-lomake</h2>
+        <p class="hint">
+          Avaa vuorotaulu excel.
+          Laskenta tapahtuu vain tässä laitteessa — mitään ei lähetetä verkkoon.
+        </p>
+        <label class="file-btn">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+          Valitse .xlsx-tiedosto
+        </label>
+        <p id="fileName" class="file-name" hidden></p>
+      </div>
+
+      <div class="card tips">
+        <p class="hint small">iPhone: Jaa → Lisää Koti-valikkoon. Windows: Chrome/Edge → Asenna sovellus.</p>
+      </div>
+    </section>
+
+    <section id="view-overview" class="view" hidden>
+      <div class="toolbar">
+        <button type="button" class="linkish" id="btnNewFile">← Uusi tiedosto</button>
+        <div id="periodMeta" class="period-meta"></div>
+      </div>
+      <h2 class="section-title" id="overviewTitle">Kaikki henkilöt</h2>
+      <p id="overviewSummary" class="overview-summary"></p>
+      <div id="personCards" class="person-cards"></div>
+      <p class="legend">
+        <span class="pill ok">OK</span> vuorojen väli ≥10 h ·
+        <span class="pill md">TARKISTA</span> 7–10 h ·
+        <span class="pill bad">EI SALLITTU</span> &lt;7 h
+      </p>
+    </section>
+
+    <section id="view-detail" class="view" hidden>
+      <div class="toolbar">
+        <button type="button" class="linkish" id="btnBack">← Kaikki</button>
+        <div id="detailTitle" class="period-meta"></div>
+      </div>
+      <div id="detailAlerts" class="alerts" hidden></div>
+      <p class="scroll-hint" id="detailScrollHint">← Pyyhkäise sivuttain nähdäksesi kaikki sarakkeet →</p>
+      <div id="detailCards" class="day-cards"></div>
+      <div class="table-wrap detail-table-wrap">
+        <table id="detailTable" class="grid detail">
+          <thead>
+            <tr>
+              <th>Päivä</th><th>Viikonpäivä</th><th>Pyhä</th>
+              <th>Alku</th><th>Loppu</th><th>Vuorojen väli</th>
+              <th>Tunnit</th><th>Yö</th><th>25%</th><th>100%</th>
+              <th>LM</th><th>Yritys</th><th>Erotus</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="detailTotals" class="totals"></div>
+    </section>
+  </main>
+
+  <footer class="app-footer">100 % paikallinen · ei seurantaa · PWA</footer>
+
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="calc.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js", { updateViaCache: "none" }).catch(() => {});
+      });
+      // When a new version takes over, reload once so all files match.
+      let reloaded = false;
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
+        });
+      }
+    }
+  </script>
+</body>
+</html>
