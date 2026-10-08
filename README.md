@@ -1,4 +1,4 @@
-# Vuorotaulun tarkastus (PWA)
+# Jakso päiväkirja (PWA)
 
 Sovellus: https://nrtyokalut.github.io/
 
