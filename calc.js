@@ -1415,19 +1415,27 @@
     return { n: auto == null ? null : auto, auto: auto, manual: false };
   }
 
+  /**
+   * LM≠Yritys warnings use only the imported sheet difference (day.check).
+   * Marks, lisävuorot and steward hours are not arguments, so they cannot
+   * create or clear a mismatch.
+   */
+  function sheetMismatches(days) {
+    return (days || []).filter(function (d) { return d.check != null && d.check > 0; });
+  }
+
   /** Summaries for overview */
 
   function summarize(result) {
     const flags = { notAllowed: 0, mdCheck: 0, checkMismatch: 0 };
     const perPerson = result.people.map((p) => {
       let na = 0,
-        md = 0,
-        mism = 0;
+        md = 0;
       p.days.forEach((d) => {
         if (d.restBefore === "Not Allowed") na++;
         if (d.restBefore === "Md,s Check") md++;
-        if (d.check != null && d.check > 0) mism++;
       });
+      const mism = sheetMismatches(p.days).length;
       flags.notAllowed += na;
       flags.mdCheck += md;
       flags.checkMismatch += mism;
@@ -1464,6 +1472,7 @@
     isKeskeytys,
     sickDates,
     sumActive,
+    sheetMismatches,
     resolveLaskenta,
     parseHM,
     formatHM,

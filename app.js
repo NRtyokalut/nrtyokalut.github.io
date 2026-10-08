@@ -433,6 +433,12 @@
     result.people.forEach((p) => {
       if (personId && p.id !== personId) return;
       const rest = personRest(p);
+      ShiftCalc.sheetMismatches(p.days).forEach((d) => {
+        items.push({
+          bad: false,
+          text: p.name + ": Tarkista erotus " + dateFi(d.date) + " = " + fmt(d.check),
+        });
+      });
       p.days.forEach((d) => {
         if (isSickDay(p, d)) return;
         const r = rest[d.date] || {};
@@ -456,12 +462,6 @@
             text: p.name + ": " + lab(r.between) + " " + dateFi(d.date) + " (lisävuoron väli " + fmt(r.betweenMin) + ")",
           });
         }
-        if (d.check != null && d.check > 0) {
-          items.push({
-            bad: false,
-            text: p.name + ": Tarkista erotus " + dateFi(d.date) + " = " + fmt(d.check),
-          });
-        }
       });
     });
     if (!items.length) {
@@ -483,6 +483,12 @@
   function personProblems(p) {
     const problems = [];
     const rest = personRest(p);
+    ShiftCalc.sheetMismatches(p.days).forEach((d) => {
+      problems.push({
+        kind: "md",
+        text: "Tarkista erotus " + dateFi(d.date).replace(/\.\d{4}$/, ".") + " = " + fmt(d.check),
+      });
+    });
     p.days.forEach((d) => {
       if (isSickDay(p, d)) return;
       const r = rest[d.date] || {};
@@ -502,12 +508,6 @@
         problems.push({
           kind: r.between === "Not Allowed" ? "bad" : "md",
           text: lab(r.between) + " " + dateFi(d.date).replace(/\.\d{4}$/, ".") + " (lisävuoron väli " + fmt(r.betweenMin) + ")",
-        });
-      }
-      if (d.check != null && d.check > 0) {
-        problems.push({
-          kind: "md",
-          text: "Tarkista erotus " + dateFi(d.date).replace(/\.\d{4}$/, ".") + " = " + fmt(d.check),
         });
       }
     });
