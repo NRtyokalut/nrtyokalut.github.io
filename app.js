@@ -218,6 +218,9 @@
   function activeLm(p) {
     return sumPerson(p, "me") + ShiftCalc.stewardBonus(isSteward(p));
   }
+  function activeCompany(p) {
+    return sumPerson(p, "company") + ShiftCalc.stewardBonus(isSteward(p));
+  }
   function loadStewardMap() {
     try {
       return JSON.parse(localStorage.getItem(ShiftCalc.STEWARD_STORAGE_KEY) || "{}") || {};
@@ -242,7 +245,7 @@
     return "LM (+" + h + " h / jakso)";
   }
   function stewardLine() {
-    return "LM-tunnit +" + fmt(ShiftCalc.stewardBonus(true));
+    return "LM-tunnit +" + fmt(ShiftCalc.stewardBonus(true)) + " (LM ja Yritys)";
   }
   function personOt(p) {
     if (!state.otEffective) return null;
@@ -586,7 +589,7 @@
         fmt(activeLm(p)) +
         "</b></div>" +
         "<div><span>Yritys</span><b>" +
-        fmt(company) +
+        fmt(activeCompany(p)) +
         "</b></div>" +
         "<div><span>Yö h</span><b>" +
         fmt(night) +
@@ -844,7 +847,7 @@
       fmt(activeLm(p)) +
       "</b><span>LM yht.</span></div>" +
       '<div class="stat"><b>' +
-      fmt(sum("company")) +
+      fmt(activeCompany(p)) +
       "</b><span>Yritys yht.</span></div>" +
       '<div class="stat"><b>' +
       fmtOt(personOt(p), "lisa") +
