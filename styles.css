@@ -211,12 +211,11 @@ table.grid tr:nth-child(even) td:first-child { background: #f8fbfd; }
 .card-meta { margin: 2px 0 0; color: var(--muted); font-size: 0.85rem; }
 .card-hours {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
   margin-bottom: 10px;
 }
 .card-hours div {
-  grid-column: span 2;
   background: #f7fafc;
   border-radius: 8px;
   padding: 6px 8px;
@@ -228,7 +227,6 @@ table.grid tr:nth-child(even) td:first-child { background: #f8fbfd; }
   text-transform: uppercase;
 }
 .card-hours b { font-size: 0.95rem; }
-.card-hours div:nth-child(n+4) { grid-column: span 3; }
 .card-problems {
   list-style: none;
   margin: 0 0 8px;

@@ -166,6 +166,7 @@
       const hrs = sum("hrs");
       const me = sum("me");
       const company = sum("company");
+      const night = sum("night");
       const b25 = sum("b25");
       const b100 = sum("b100");
       const badge =
@@ -205,17 +206,20 @@
         "<div><span>Kovat tunnit</span><b>" +
         fmt(hrs) +
         "</b></div>" +
-        "<div><span>Lauantai h</span><b>" +
-        fmt(b25) +
-        "</b></div>" +
-        "<div><span>Pyhä h</span><b>" +
-        fmt(b100) +
-        "</b></div>" +
         "<div><span>LM</span><b>" +
         fmt(me) +
         "</b></div>" +
         "<div><span>Yritys</span><b>" +
         fmt(company) +
+        "</b></div>" +
+        "<div><span>Yö</span><b>" +
+        fmt(night) +
+        "</b></div>" +
+        "<div><span>Lauantai h</span><b>" +
+        fmt(b25) +
+        "</b></div>" +
+        "<div><span>Pyhä h</span><b>" +
+        fmt(b100) +
         "</b></div>" +
         "</div>" +
         problemList +
