@@ -1430,13 +1430,16 @@
    *   no toteuma / peruttu → planned shift (kind "plan"; peruttu keeps the planned hours, local agreement)
    *   peruttu late + korvaus → null: peruutuskorvaus chosen instead, hours count 0
    *   vaihto               → planned shift (hours as planned); lisät use the driven times
-   *   muutos / korvattu    → actual times (kind "actual")
+   *   muutos               → actual times (kind "actual")
+   *   korvattu             → new shift times (kind "korvattu"); figures = MAX(planned, new) per field
    *   kutsu on a day off   → actual times, or the told times when no actual given (kind "kutsu")
    */
   function countedShift(d, toteumat) {
     const t = normToteuma(toteumat && toteumat[d.date]);
     if (d.start != null) {
-      if (t && (t.type === "muutos" || t.type === "korvattu")) return { kind: "actual", start: t.start, end: t.end, t: t };
+      if (t && t.type === "muutos") return { kind: "actual", start: t.start, end: t.end, t: t };
+      // cancelled, new shift given: each figure = MAX(planned, new shift); km follow the new shift
+      if (t && t.type === "korvattu") return { kind: "korvattu", start: t.start, end: t.end, t: t };
       // late cancellation: Pekka chooses hours (default) OR peruutuskorvaus — never both
       if (t && t.type === "peruttu" && t.late && t.korvaus) return null;
       return { kind: "plan", start: d.start, end: d.end, t: t };
@@ -1461,12 +1464,14 @@
       return Math.min(a.e, b.e) - Math.max(a.s, b.s) > 0;
     };
     if (hit(c.start, c.end)) return true;
+    if (c.kind === "korvattu" && hit(d.start, d.end)) return true;
     return !!(c.t && c.t.type === "vaihto" && hit(c.t.start, c.t.end));
   }
 
   /**
    * Sum a day field, skipping keskeytyspäivät. Toteuma (optional) replaces planned times
-   * (muutos/korvattu) or adds a kutsu shift; a cancelled shift keeps its planned hours.
+   * (muutos), takes MAX(planned, new) per field (korvattu) or adds a kutsu shift;
+   * a cancelled shift keeps its planned hours.
    * "company" for a changed planned shift = sheet figure + (actual LM − planned LM),
    * so the sheet's Erotus is unchanged. App-only shifts: Yritys follows LM.
    */
@@ -1480,7 +1485,15 @@
         if (d[key] != null) total += d[key];
       } else if (c) {
         const fig = computeShiftFigures(d.dateObj || d.date, c.start, c.end, holidayMap || {});
-        if (fig) {
+        if (fig && c.kind === "korvattu") {
+          const meMax = Math.max(d.me || 0, fig.me || 0);
+          if (key === "company") {
+            if (d.company != null) total += d.company + (meMax - d.me);
+          } else if (key === "check") {
+            if (d.check != null) total += d.check;
+          } else if (key === "me") total += meMax;
+          else total += Math.max(d[key] || 0, fig[key] || 0);
+        } else if (fig) {
           if (c.kind === "actual" && key === "company") {
             if (d.company != null) total += d.company + (fig.me - d.me);
           } else if (c.kind === "actual" && key === "check") {
@@ -1605,7 +1618,8 @@
    *   { type: "muutos", start, end, oma }   planned shift ran at other times (oma = own request)
    *   { type: "peruttu", late, korvaus }   cancelled, no new shift (late = notice after 17:00 the day before;
    *                                       korvaus = peruutuskorvaus chosen instead of the planned hours)
-   *   { type: "korvattu", start, end }     cancelled and another shift given instead
+   *   { type: "korvattu", start, end }     cancelled and another shift given instead: hours, LM and each
+   *                                       lisä = MAX(planned, new shift); km follow the new shift
    *   { type: "vaihto", start, end }       shift swapped with a colleague (Lisälehti 11): start/end = shift
    *                                       actually driven. Hours/LM stay as the OWN planned shift (longer
    *                                       or shorter swap alike), lisät follow the driven shift, no korvaus.
@@ -1676,7 +1690,12 @@
           const dv = deviation(planned, t);
           if (dv.hit && !t.oma) addFixed("poikkeama", d.date, devWhy(dv));
         } else if (t.type === "korvattu") {
-          addMin(d.date, t.start, t.end);
+          // each lisä type = MAX(planned shift's minutes, new shift's minutes)
+          const mp = lisaShiftMinutes(d.date, planned.start, planned.end, holidayMap);
+          const mn = lisaShiftMinutes(d.date, t.start, t.end, holidayMap);
+          LISA_KEYS.forEach(function (k) {
+            mins[k] += Math.max(mp[k], mn[k]);
+          });
           const dv = deviation(planned, t);
           if (dv.hit) addFixed("poikkeama", d.date, "peruttu, tilalle vuoro joka " + devWhy(dv));
         } else if (t.type === "peruttu") {

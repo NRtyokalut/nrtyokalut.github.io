@@ -807,7 +807,10 @@
       const ev = lisat.events.filter((e) => e.date === d.date);
       const c = ShiftCalc.countedShift(d, personTots(p));
       const fig = c && c.kind !== "plan" ? ShiftCalc.computeShiftFigures(d.date, c.start, c.end, state.holidayMap) : null;
-      const hrsTxt = fig
+      const korv = c && c.kind === "korvattu" && fig;
+      const hrsTxt = korv
+        ? "<br/>Lasketaan vähintään suunnitellun mukaan: kovat " + fmt(Math.max(d.hrs, fig.hrs)) + " · LM " + fmt(Math.max(d.me, fig.me)) + " (suunniteltu " + fmt(d.me) + ", uusi vuoro " + fmt(fig.me) + "). Lisät lajeittain suuremman mukaan, km uuden vuoron mukaan."
+        : fig
         ? "<br/>Lasketaan: kovat " + fmt(fig.hrs) + " · LM " + fmt(fig.me) + (planned ? " (suunniteltu LM " + fmt(d.me) + ")" : "")
         : t.type === "vaihto" ? "<br/>Tunnit oman suunnitellun vuoron mukaan (kovat " + fmt(d.hrs) + " · LM " + fmt(d.me) + "), lisät ajetun vuoron mukaan. Ei poikkeamakorvausta."
         : t.type === "peruttu" ? (t.late && t.korvaus ? "<br/>Tunnit eivät lasketa (LM 0:00, suunniteltu " + fmt(d.me) + ")" : "<br/>Suunnitellut tunnit lasketaan (LM " + fmt(d.me) + ")") : "";
@@ -828,13 +831,14 @@
           opt("muutos", "Aika muuttui (työnjohdon määräys)") +
           opt("oma", "Oman vuoron aika muuttui omasta pyynnöstä") +
           opt("vaihto", "Vaihdettu vuoro (työkaverin kanssa)") +
-          opt("korvattu", "Peruttu, tilalle toinen vuoro") +
+          opt("korvattu", "Peruttu, tilalle annettiin toinen vuoro") +
           opt("peruttu_late", "Peruttu klo 17 jälkeen edellisenä päivänä, ei uutta vuoroa") +
           opt("peruttu_ok", "Peruttu ajoissa (ennen klo 17)")
         : opt("", "Vapaapäivä") + opt("kutsu", "Kutsuttu vapaapäivänä")) +
       "</select></label>" +
       (planned
         ? '<p class="tot-help" data-for="oma">Oma vuorosi alkoi tai päättyi eri aikaan pyynnöstäsi. Toteutuneet tunnit lasketaan kovina tunteina, LM:nä ja ylitöinä. Poikkeamakorvausta ei makseta.</p>' +
+          '<p class="tot-help" data-for="korvattu">Vuoro peruttiin ja tilalle annettiin toinen vuoro. Anna uuden vuoron alku ja loppu. Tunnit ja lisät vähintään suunnitellun vuoron mukaan, km uuden vuoron mukaan. Kovat tunnit, Yö h ja LM ovat suunnitellun (' + fmt(d.start) + "–" + fmt(d.end) + ') ja uuden vuoron suurempi. Ilta-, yö-, la-, su- ja aattolisät lasketaan lajeittain suuremman mukaan. Poikkeamakorvaus, jos uusi vuoro alkaa aiemmin tai päättyy vähintään 30 min myöhemmin. Ei vapaa-ajan korvausta.</p>' +
           '<p class="tot-help" data-for="vaihto">Ajoit työkaverin vuoron (pidemmän tai lyhyemmän) ja hän ajoi sinun. Anna ajetun vuoron alku ja loppu. Kovat tunnit, Yö h ja LM lasketaan oman suunnitellun vuorosi mukaan (' + fmt(d.start) + "–" + fmt(d.end) + ', LM ' + fmt(d.me) + '), joten vaihto ei lisää eikä vähennä ylitöitä (Lisälehti 11). Ilta-, yö-, la-, su- ja aattolisät lasketaan ajetun vuoron mukaan. Ei poikkeama- eikä vapaa-ajan korvausta.</p>'
         : '<p class="tot-help" data-for="">Vaihtoa vapaapäivälle ei voi merkitä. Merkitse vaihto sille päivälle, jolla oma vuorosi oli.</p>') +
       (planned
