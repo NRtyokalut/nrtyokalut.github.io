@@ -1,6 +1,8 @@
 # Jakso päiväkirja (PWA)
 
-Sovellus: https://nrtyokalut.github.io/
+Sovellus: https://pekantyokalut.github.io/
+
+Erillinen tarkastussovellus (Vuorotaulun tarkastus): https://pekantyokalut.github.io/tarkastus/
 
 Paikallinen, asennettava web-sovellus junakuljettajan jakso-lomakkeen tarkistukseen.
 
@@ -31,6 +33,7 @@ Vertaa laskentaa LibreOffice-uudelleenlaskettuun v6-työkirjaan (`golden.json`).
 - `app.js` / `index.html` / `styles.css` — UI
 - `lib/xlsx.full.min.js` — SheetJS (paikallinen)
 - `sw.js` / `manifest.webmanifest` / `icons/` — PWA
+- `tarkastus/` — Vuorotaulun tarkastus: oma PWA (oma manifest, service worker, ikonit ja `tarkastus.*`-tallennus)
 
 ---
 © 2026 Lämpöpumppu Mafia. Kaikki oikeudet pidätetään. All rights reserved. Katso LICENSE.

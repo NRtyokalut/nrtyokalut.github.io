@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<!-- © 2026 Lämpöpumppu Mafia. Kaikki oikeudet pidätetään. All rights reserved. -->
+<html lang="fi">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0B3D5C" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Tarkastus" />
+  <link rel="manifest" href="manifest.webmanifest" />
+  <link rel="apple-touch-icon" href="icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+  <title>Vuorotaulun tarkastus</title>
+  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="tarkastus.css" />
+</head>
+<body>
+  <header class="app-header">
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" width="36" height="36" />
+      <div>
+        <h1>Vuorotaulun tarkastus</h1>
+        <p class="sub">Tiedot pysyvät laitteellasi<br/>Toimii offlinessa</p>
+      </div>
+    </div>
+  </header>
+
+  <main id="app">
+    <section id="view-home" class="view">
+      <div class="card">
+        <h2>Valitse jakso-lomake</h2>
+        <p class="hint">Avaa vuorotaulu excel. Laskenta tapahtuu vain tässä laitteessa — mitään ei lähetetä verkkoon.</p>
+        <label class="file-btn">
+          <input type="file" id="fileInput" accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel" />
+          Valitse .xlsx-tiedosto
+        </label>
+        <p id="fileName" class="file-name" hidden></p>
+      </div>
+
+      <div id="startPrompt" class="card" hidden>
+        <p class="hint" id="startPromptText">Aloituspäivää ei löytynyt — anna jakson alkupäivä</p>
+        <input type="date" id="startDateInput" class="start-date-input" />
+        <button type="button" class="file-btn" id="startDateOk">Jatka</button>
+        <p id="startDateErr" class="start-date-err" hidden></p>
+      </div>
+
+      <div class="card">
+        <h2>Vertailuhistoria</h2>
+        <p class="hint" id="homeHistory">Ei tallennettuja jaksoja.</p>
+        <button type="button" class="file-btn ghost" id="btnHomeVertailu">Avaa vertailu (vuosi)</button>
+      </div>
+
+      <details class="card guide">
+        <summary>Käyttöohjeet</summary>
+        <h3>1. Avaa jakso</h3>
+        <p>Paina <b>Valitse .xlsx-tiedosto</b> ja valitse jakso-lomake. Sovellus etsii jakson alkupäivän ”Jakso”-solun alta. Jos sitä ei löydy, sovellus pyytää antamaan päivän itse.</p>
+        <h3>2. Etusivu: kaikki henkilöt</h3>
+        <ul>
+          <li><b>Kovat tunnit</b>: tehdyt tunnit vuorojen mukaan.</li>
+          <li><b>Tunnit yhteensä</b>: lomakkeen tunnit yhteensä. Ylityöt lasketaan tästä.</li>
+          <li><b>Yritys</b>: yrityksen laskemat tunnit lomakkeella. <b>Erotus</b> näyttää päivät, joilla Tunnit yhteensä ja Yritys eivät täsmää.</li>
+          <li><b>Yö h, Lauantai h, Pyhä h</b>: lomakkeen lisätunnit.</li>
+          <li><b>Lisätyö h, Ylityö 50 %, Ylityö 100 %</b>: jakson rajojen ylittävät tunnit.</li>
+        </ul>
+        <p><span class="pill ok">OK</span> vuorojen väli vähintään 10 h. <span class="pill md">TARKISTA</span> väli 7–10 h tai Tunnit yhteensä ja Yritys eivät täsmää. <span class="pill bad">EI SALLITTU</span> väli alle 7 h.</p>
+        <h3>3. Ylityörajat</h3>
+        <p>Rajat lasketaan automaattisesti jakson arkipyhien mukaan. Jos rajat ovat eri, paina <b>Muuta</b> ja syötä oikeat. <b>Palauta oletus</b> palauttaa lasketut rajat.</p>
+        <h3>4. Henkilön vuorotaulu</h3>
+        <ul>
+          <li><b>Laskentapäivät</b> (oletus 21): keskeytyneen jakson ylityörajat lasketaan tämän mukaan.</li>
+          <li><b>LM-ruutu</b>: luottamusmiehen +8 h jaksossa. Lisätään Tunnit yhteensä- ja Yritys-tunteihin. Ruutu muistetaan nimen mukaan.</li>
+          <li><b>Keskeytyspäivä</b>: sairaus tai loma. Päivän tunnit poistuvat ja laskentapäivät vähenevät yhdellä.</li>
+          <li><b>Suunnitellut lisät</b>: ilta-, yö-, lauantai-, sunnuntai- ja aattolisien tunnit suunniteltujen vuorojen mukaan, pyöristettynä TES:n §24 mukaan (alle 30 min alas, 30 min tai yli ylös).</li>
+        </ul>
+        <h3>5. Vertailu</h3>
+        <p>Paina <b>Vertailu</b>. Taulukossa on rivi jokaisesta kuljettajasta: Tunnit yhteensä, kovat tunnit, Su, La, Yö, Ilta ja Aatto h, sunnuntaivuorojen määrä sekä lisätyö ja ylityöt. Alimpana on ryhmän keskiarvo. Jokaisen luvun alla on ero keskiarvoon (±). Ero väritetään, kun se ylittää rajan (oletus 4:00 h, vuoroissa 1). Raja on muutettavissa. Sarakkeen otsikkoa painamalla rivit järjestetään.</p>
+        <ul>
+          <li><b>Su-vuorot</b>: vuorot, jotka alkavat sunnuntaina tai pyhäpäivänä.</li>
+          <li><b>Skaalaa keskeytyspäivät</b>: luvut muutetaan vastaamaan täyttä 21 päivän jaksoa (luku × 21 / laskentapäivät), jotta sairausloma ei näytä tuntien vajaukselta.</li>
+          <li><b>Luonnos vai julkaistu</b>: ladattu vuorotaulu on aina ensin <b>Luonnos</b>. Kun lataat julkaistun version, rastita <b>Julkaistu vuorotaulu</b> ja paina <b>Tallenna julkaistuna</b>. Luonnosta voi vertailla Jakso-näkymässä ja tallentaa, mutta sitä ei koskaan lasketa vuoteen.</li>
+          <li><b>Korvaaminen</b>: jakso tallennetaan alkupäivän mukaan. Saman jakson uusi tallennus korvaa vanhan. Julkaistun version korvaaminen kysyy vahvistuksen (<i>Korvataanko aiempi julkaistu versio?</i>), ja muutokset edelliseen (tunnit, kovat, Su h, Su-vuorot kuljettajittain) näytetään. Luonnosta ei tallenneta julkaistun päälle.</li>
+          <li><b>Vuosi</b>-näkymä laskee yhteen vain vuoden <b>julkaistut</b> jaksot nimen mukaan, ja näyttää niiden määrän. Tallennetuissa jaksoissa on merkki Luonnos tai Julkaistu, ja tilaa voi vaihtaa listasta. Ennen tätä tallennetut jaksot merkitään julkaistuiksi ("vanha").</li>
+          <li><b>Lataa PDF</b>: avaa tulostuksen, valitse <b>Tallenna PDF:nä</b>. PDF:ssä on vertailutaulukko keskiarvoineen ja eroineen sekä kuljettajien tuntiyhteenveto. Toimii ilman verkkoa.</li>
+          <li><b>Vie CSV</b> ja <b>Tuo CSV</b>: historian varmuuskopio ja siirto toiseen laitteeseen.</li>
+        </ul>
+        <h3>6. Tietojen tallennus</h3>
+        <p>Kaikki merkinnät ja historia tallentuvat vain tähän laitteeseen. Ota välillä varmuuskopio <b>Vie CSV</b> -napilla.</p>
+      </details>
+
+      <div class="card tips">
+        <p class="hint small">iPhone: Jaa → Lisää Koti-valikkoon. Windows: Chrome/Edge → Asenna sovellus.</p>
+      </div>
+    </section>
+
+    <section id="view-overview" class="view" hidden>
+      <div class="toolbar">
+        <button type="button" class="linkish" id="btnNewFile">← Uusi tiedosto</button>
+        <div id="periodMeta" class="period-meta"></div>
+      </div>
+      <div class="tk-nav">
+        <h2 class="section-title" id="overviewTitle">Kaikki henkilöt</h2>
+        <button type="button" class="tk-btn" id="btnVertailu">Vertailu →</button>
+      </div>
+      <p id="overviewSummary" class="overview-summary"></p>
+      <p id="otMeta" class="ot-meta"></p>
+      <div id="personCards" class="person-cards"></div>
+      <p class="legend">
+        <span class="pill ok">OK</span> vuorojen väli ≥10 h ·
+        <span class="pill md">TARKISTA</span> 7–10 h tai erotus ·
+        <span class="pill bad">EI SALLITTU</span> &lt;7 h
+      </p>
+    </section>
+
+    <section id="view-detail" class="view" hidden>
+      <div class="toolbar">
+        <button type="button" class="linkish" id="btnBack">← Kaikki</button>
+        <div id="detailTitle" class="period-meta"></div>
+      </div>
+      <div id="detailAlerts" class="alerts" hidden></div>
+      <div class="detail-tools">
+      <div id="laskentaBox" class="laskenta-box" hidden>
+        <label>
+          <span>
+            <span id="laskentaLabel">Laskentapäivät</span>
+            <button type="button" id="laskentaReset" class="linkish" hidden>Palauta automaattinen</button>
+          </span>
+          <input type="number" id="laskentaInput" min="1" max="21" step="1" inputmode="numeric" />
+        </label>
+        <p id="laskentaLine" class="ot-meta"></p>
+      </div>
+      <label class="lm-check">
+        <input type="checkbox" id="lmCheck" />
+        <span id="lmCheckLabel">LM</span>
+      </label>
+      </div>
+      <p class="scroll-hint" id="detailScrollHint">← Pyyhkäise sivuttain nähdäksesi kaikki sarakkeet →</p>
+      <div id="detailCards" class="day-cards"></div>
+      <div class="table-wrap detail-table-wrap">
+        <table id="detailTable" class="grid detail">
+          <thead>
+            <tr>
+              <th>Päivä</th><th>Viikonpäivä</th><th>Pyhä</th>
+              <th>Alku</th><th>Loppu</th><th>Vuorojen väli</th>
+              <th>Kovat tunnit</th><th>Yö h</th><th>Lauantai h</th><th>Pyhä h</th>
+              <th>Tunnit yhteensä</th><th>Yritys</th><th>Erotus</th>
+            </tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+      <div id="detailTotals" class="totals"></div>
+      <div id="detailLisat" class="card lisat-card"></div>
+    </section>
+
+    <section id="view-vertailu" class="view" hidden>
+      <div class="toolbar">
+        <button type="button" class="linkish" id="btnVertBack">← Takaisin</button>
+        <div id="vertMeta" class="period-meta"></div>
+      </div>
+      <h2 class="section-title">Vertailu</h2>
+      <div class="tk-controls">
+        <div class="seg" role="radiogroup" aria-label="Jakso vai vuosi">
+          <label><input type="radio" name="vertMode" value="jakso" id="modeJakso" checked><span>Jakso</span></label>
+          <label><input type="radio" name="vertMode" value="vuosi" id="modeVuosi"><span>Vuosi</span></label>
+        </div>
+        <select id="vertYear" hidden></select>
+        <label class="tk-inline"><input type="checkbox" id="vertScale"> Skaalaa keskeytyspäivät (× 21 / laskentapäivät)</label>
+        <label class="tk-inline">Värirajat: ± <input id="vertThr" inputmode="decimal" value="4:00" size="5"> h · ± <input id="vertThrN" inputmode="numeric" value="1" size="2"> vuoroa</label>
+      </div>
+      <p id="vertInfo" class="ot-meta"></p>
+      <div class="table-wrap vert-wrap"><table id="vertTable" class="vert-table"></table></div>
+      <p class="ot-meta">Pienet luvut: ero ryhmän keskiarvoon. <span class="dev-hi">Punainen</span> = yli rajan keskiarvoa enemmän, <span class="dev-lo">sininen</span> = yli rajan vähemmän. Su/La/Yö/Ilta/Aatto h = suunnitellut TES-lisätunnit (§17–21), minuutteina ennen pyöristystä.</p>
+      <div class="tk-actions">
+        <div id="pubBox" class="pub-box">
+          <label class="pub-toggle"><input type="checkbox" id="pubCheck"> <b>Julkaistu vuorotaulu</b></label>
+          <span id="pubHint" class="ot-meta"></span>
+        </div>
+        <button type="button" class="tk-btn" id="btnSaveHist">Tallenna luonnoksena</button>
+        <button type="button" class="tk-btn" id="btnPdf">Lataa PDF</button>
+        <button type="button" class="tk-btn ghost" id="btnExport">Vie CSV</button>
+        <label class="tk-btn ghost">Tuo CSV<input type="file" id="csvInput" accept=".csv,text/csv" hidden></label>
+      </div>
+      <p id="histMsg" class="ot-meta"></p>
+      <div id="histDiff" class="hist-diff"></div>
+      <div id="histList" class="hist-list"></div>
+    </section>
+  </main>
+
+  <footer class="app-footer">100 % paikallinen · ei seurantaa · PWA<br/>© 2026 Lämpöpumppu Mafia · Kaikki oikeudet pidätetään</footer>
+
+  <script src="lib/xlsx.full.min.js"></script>
+  <script src="calc.js"></script>
+  <script src="app.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) {
+      window.addEventListener("load", () => {
+        navigator.serviceWorker.register("./sw.js", { scope: "./", updateViaCache: "none" }).catch(() => {});
+      });
+      let reloaded = false;
+      if (navigator.serviceWorker.controller) {
+        navigator.serviceWorker.addEventListener("controllerchange", () => {
+          if (reloaded) return;
+          reloaded = true;
+          window.location.reload();
+        });
+      }
+    }
+  </script>
+</body>
+</html>

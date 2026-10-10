@@ -1,10 +1,10 @@
-const CACHE = "pekantyokalut-v56";
-// The checker app lives at ./tarkastus/ with its own service worker and caches ("tarkastus-*").
-const SUBAPP = new URL("./tarkastus/", self.registration.scope).href;
+// Vuorotaulun tarkastus — own service worker, scope ./ (= /tarkastus/). Separate from the root app.
+const CACHE = "tarkastus-v1";
 const ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
+  "./tarkastus.css",
   "./app.js",
   "./calc.js",
   "./manifest.webmanifest",
@@ -13,7 +13,6 @@ const ASSETS = [
   "./icons/icon-512.png",
 ];
 
-// Always fetch fresh copies at install so old and new files never mix.
 self.addEventListener("install", (e) => {
   e.waitUntil(
     caches
@@ -23,23 +22,20 @@ self.addEventListener("install", (e) => {
   );
 });
 
+// Only clean up this app's own old caches ("tarkastus-*"); the root app's caches are left alone.
 self.addEventListener("activate", (e) => {
   e.waitUntil(
     caches
       .keys()
-      .then((keys) =>
-        Promise.all(keys.filter((k) => k !== CACHE && !k.startsWith("tarkastus-")).map((k) => caches.delete(k)))
-      )
+      .then((keys) => Promise.all(keys.filter((k) => k !== CACHE && k.startsWith("tarkastus-")).map((k) => caches.delete(k))))
       .then(() => self.clients.claim())
   );
 });
 
-// Network first (fresh files when online), cache as offline fallback.
+// Network first, cache as offline fallback. Only requests inside this scope.
 self.addEventListener("fetch", (e) => {
   const req = e.request;
-  if (req.method !== "GET") return;
-  // Never touch the checker app: its own SW (scope ./tarkastus/) handles it; before that, plain network.
-  if (req.url.startsWith(SUBAPP)) return;
+  if (req.method !== "GET" || !req.url.startsWith(self.registration.scope)) return;
   e.respondWith(
     fetch(req, { cache: "no-store" })
       .then((res) => {

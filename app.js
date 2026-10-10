@@ -1290,6 +1290,109 @@
       '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, Tunnit yhteensä -luvun ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
   }
 
+  // --- Lataa PDF: print view (window.print → "Tallenna PDF:nä"), works offline ---
+  function printDoc(title, html) {
+    let box = $("printView");
+    if (!box) {
+      box = document.createElement("div");
+      box.id = "printView";
+      document.body.appendChild(box);
+    }
+    box.innerHTML = html + '<p class="pv-foot">© 2026 Lämpöpumppu Mafia · Kaikki oikeudet pidätetään</p>';
+    const oldTitle = document.title;
+    document.title = title;
+    const restore = () => {
+      document.title = oldTitle;
+      window.removeEventListener("afterprint", restore);
+    };
+    window.addEventListener("afterprint", restore);
+    window.print();
+  }
+  function jaksoRange() {
+    const end = state.dates && state.dates.length ? state.dates[state.dates.length - 1] : state.startDate;
+    return dateFi(state.startDate) + "–" + dateFi(end);
+  }
+  function pvTable(head, rows, cls) {
+    return (
+      '<table class="pv-table ' + (cls || "") + '"><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
+      rows.map((r) => "<tr" + (r.cls ? ' class="' + r.cls + '"' : "") + ">" + (r.cells || r).map((c) => "<td>" + (c == null ? "" : c) + "</td>").join("") + "</tr>").join("") +
+      "</tbody></table>"
+    );
+  }
+  function printPerson(p) {
+    const marks = personMarks(p), ex = personExtras(p), tots = personTots(p), hm = state.holidayMap;
+    const L = personLisat(p);
+    const vr = personVeturiraha(p);
+    const aa = personAutoajo(p);
+    const ot = personOt(p);
+    const fm = (m) => (m ? fmt(m) : "");
+    const dayRows = p.days.map((d) => {
+      const sick = isSickDay(p, d);
+      const t = ShiftCalc.normToteuma(tots[d.date]);
+      const one = [d];
+      const me = sick ? 0 : ShiftCalc.sumActive(one, marks, "me", ex, hm, tots);
+      const hrs = sick ? 0 : ShiftCalc.sumActive(one, marks, "hrs", ex, hm, tots);
+      const m = sick ? null : ShiftCalc.lisatSummary(one, marks, ex, tots, hm).minutes;
+      const extra = ex[d.date];
+      const plan = d.start != null ? fmt(d.start) + "–" + fmt(d.end) : "–";
+      const act = [t ? totSummaryText(t) : "", extra ? "Lisävuoro " + fmt(extra.start) + "–" + fmt(extra.end) : ""].filter(Boolean).join("; ");
+      return {
+        cls: sick ? "pv-sick" : "",
+        cells: [
+          (WD_SHORT[d.weekday] || "") + " " + dateFi(d.date).slice(0, 6) + (d.special ? "<small>" + d.special + "</small>" : ""),
+          plan, act ? "<small>" + escHtml(act) + "</small>" : "", fm(me), fm(hrs),
+          m ? fm(m.ilta) : "", m ? fm(m.yo) : "", m ? fm(m.la) : "", m ? fm(m.su) : "", m ? fm(m.aatto) : "",
+          sick ? "Kyllä" : "",
+        ],
+      };
+    });
+    const lmMin = stewardMinutes(p);
+    if (lmMin) dayRows.push(["Luottamusmiestunnit", "", "<small>" + escHtml(stewardLine(p)) + "</small>", "+" + fmt(lmMin), "", "", "", "", "", "", ""]);
+    dayRows.push({
+      cls: "pv-sum",
+      cells: ["<b>Yhteensä</b>", "", "", fmt(activeLm(p)), fmt(sumPerson(p, "hrs")), fmt(L.minutes.ilta), fmt(L.minutes.yo), fmt(L.minutes.la), fmt(L.minutes.su), fmt(L.minutes.aatto), sickCount(p) || ""],
+    });
+    const trainRows = vr.trains.map((t) => [dayLabel(t.date), escHtml(t.junanumero || "–"), t.veturina ? "–" : tonnit(t.paino) + " t", "<b>" + (t.yksin ? "Yksinajo" : "Kaksinajo") + "</b>" + (t.veturina ? " · veturina ajo" : "") + (t.hidas && !t.veturina ? " · hidas" : "") + (t.ivyvak && !t.veturina ? " · IVY-VAK" : ""), t.code, numFi(t.km), eur(t.eur)]);
+    const autoRows = aa.trips.map((t) => [dayLabel(t.date), ShiftCalc.AUTOAJO_LABELS[t.tyyppi], numFi(t.km) + (t.paidKm !== t.km ? " → " + numFi(t.paidKm) : ""), "–", eur(t.eur)]);
+    const C = ShiftCalc.LISA_CODES;
+    const lisaRows = [["ilta", "Iltatyölisä"], ["yo", "Yötyölisä"], ["la", "Lauantaityökorvaus"], ["su", "Sunnuntaityökorvaus"], ["aatto", "Aattopäivänlisä"]].map((r) => [r[1], C[r[0]] || "–", fmt(L.minutes[r[0]]), L.hours[r[0]] + " h"]);
+    const fixedRows = ["poikkeama", "vapaa", "peruutus"].map((k) => [FIXED_LABEL[k], C[k], L.fixed[k].n + " kpl", eur(L.fixed[k].eur)]);
+    const endKey = state.dates[state.dates.length - 1];
+    const rates = ShiftCalc.palkkioRatesInRange(state.startDate, endKey).map((r, i) => eur(r.eur) + "/kk" + (i ? " " + dateFi(r.from).slice(0, 6) + " alkaen" : "")).join(", ");
+    const pk = [];
+    if (isSteward(p)) pk.push(["Luottamusmiespalkkio", rates, "maksetaan 10 kk/vuosi (varamiehelle 2 kk)"]);
+    if (isTsv(p)) pk.push(["Työsuojeluvaltuutetun palkkio", rates, "12 kk/vuosi (varahenkilölle 2 kk)"]);
+    const flags = [isSteward(p) ? "LM (+8 h)" : "", isTsv(p) ? "TSV" : ""].filter(Boolean).join(" · ");
+    const html =
+      '<header class="pv-head"><h1>Jakso päiväkirja</h1><p><b>' + escHtml(p.name) + "</b> · " + (state.periodLabel ? escHtml(state.periodLabel) + " · " : "") + jaksoRange() +
+      (flags ? " · " + flags : "") + "</p><p class=\"pv-meta\">Tulostettu " + dateFi(new Date().toISOString().slice(0, 10)) + "</p></header>" +
+      "<h2>Päivät</h2>" +
+      pvTable(["Päivä", "Suunniteltu", "Toteuma", "Tunnit yht.", "Kovat", "Ilta", "Yö", "La", "Su", "Aatto", "Kesk."], dayRows, "pv-days") +
+      "<h2>Junat ja ajot</h2>" +
+      (trainRows.length ? pvTable(["Päivä", "Juna", "Paino", "Ajo", "Koodi", "Km", "€"], trainRows) : '<p class="pv-meta">Ei junia.</p>') +
+      (autoRows.length ? "<h2>Autolla-ajo</h2>" + pvTable(["Päivä", "Ajo", "Km", "Koodi", "€"], autoRows) : "") +
+      "<h2>Lisät (TES)</h2>" +
+      pvTable(["Tuntilisä", "Koodi", "Tehty", "Maksetaan"], lisaRows) +
+      pvTable(["Korvaus", "Koodi", "Määrä", "€"], fixedRows.concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(L.fixedTotal)] }])) +
+      (vr.rows.length
+        ? pvTable(["Veturiraha palkkalajeittain", "Koodi", "Km", "€"], vr.rows.map((r) => [r.label + " <small>" + String(r.rate).replace(".", ",") + " €/km</small>", r.code, numFi(r.km), eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Veturiraha yhteensä</b>", "", numFi(vr.km), eur(vr.eur)] }]))
+        : "") +
+      (aa.rows.length
+        ? pvTable(["Autolla-ajokorvaus", "Koodi", "Km", "€"], aa.rows.map((r) => [r.label + " <small>" + String(r.rate).replace(".", ",") + " €/km</small>", "–", numFi(r.km), eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Autolla-ajo yhteensä</b>", "", numFi(aa.km), eur(aa.eur)] }]))
+        : "") +
+      "<h2>Tunnit ja ylityöt</h2>" +
+      pvTable(["", "Tunnit"], [
+        ["Kovat tunnit", fmt(sumPerson(p, "hrs"))],
+        ["Tunnit yhteensä", fmt(activeLm(p))],
+        ["Lisätyö", fmtOt(ot, "lisa")],
+        ["Ylityö 50 %", fmtOt(ot, "yli50")],
+        ["Ylityö 100 %", fmtOt(ot, "yli100")],
+      ], "pv-narrow") +
+      '<p class="pv-meta">' + overtimeText(state.otEffective) + (isSteward(p) ? " · " + stewardLine(p) : "") + "</p>" +
+      (pk.length ? "<h2>Palkkiot</h2>" + pvTable(["Palkkio", "€/kk", ""], pk) + '<p class="pv-meta">Palkkiot ovat kuukausikohtaisia, eivät jaksokohtaisia.</p>' : "");
+    printDoc("Jakso päiväkirja – " + p.name + " – " + jaksoRange(), html);
+  }
+
   function openDetail(personId) {
     const p = state.people.find((x) => x.id === personId);
     if (!p) return;
@@ -1689,6 +1792,7 @@
         });
     });
 
+    $("btnPdf").onclick = () => printPerson(p);
     renderAlerts($("detailAlerts"), state, personId);
     show("detail");
   }
