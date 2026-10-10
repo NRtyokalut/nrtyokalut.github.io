@@ -2050,6 +2050,12 @@
     return who + " · " + (t.hidas ? "hidas tavarajuna (enint. 40 km/h) " : "tavarajuna ") + w;
   }
 
+  /** Junapainoluokat, TES:n tavarajunataulukon tekstein. */
+  const JUNAPAINO_LABELS = {
+    3: "3. junapaino 1500 tn tai alle",
+    4: "4. junapaino yli 1500 tn enint. 4800 tn",
+    5: "5. junapaino yli 4800 tn enint. 5600 tn tai IVY-VAK-juna",
+  };
   function veturirahaRatesFor(key) {
     let r = VETURIRAHA_RATES[0];
     VETURIRAHA_RATES.forEach(function (x) {
@@ -2068,6 +2074,8 @@
     return {
       junanumero: String(j.junanumero == null ? "" : j.junanumero).trim(),
       paino: num(j.paino),
+      // junapainoluokka 3/4/5 (TES taulukko); older saves typed tons → class from paino (≤ 1500 → 3, ≤ 4800 → 4, else 5)
+      jp: j.jp === 3 || j.jp === 4 || j.jp === 5 ? j.jp : num(j.paino) == null ? null : num(j.paino) <= 1500 ? 3 : num(j.paino) <= 4800 ? 4 : 5,
       km: num(j.km),
       // true/false = saved manual choice; null = not chosen → auto-detected from the sheet (see pairPartners)
       yksin: j.yksin === true ? true : j.yksin === false ? false : null,
@@ -2358,6 +2366,7 @@
   /** Junapaino class 3/4/5 (TES rows 3.–5.) */
   function junapainoLuokka(j) {
     if (j.ivyvak && !j.hidas) return 5; // Huomautus 2 / "tai IVY-VAK-juna"
+    if (j.jp === 3 || j.jp === 4 || j.jp === 5) return j.jp;
     if (j.paino == null) return null;
     if (j.paino <= 1500) return 3;
     if (j.paino <= 4800) return 4;
@@ -2515,6 +2524,7 @@
     veturirahaRatesFor,
     normJuna,
     junapainoLuokka,
+    JUNAPAINO_LABELS,
     veturirahaCode,
     veturirahaSummary,
     veturirahaTitle,

@@ -1215,6 +1215,10 @@
   function rateFi(x) {
     return String(x).replace(".", ",");
   }
+  function jpShort(j) {
+    const k = ShiftCalc.junapainoLuokka(ShiftCalc.normJuna(j) || j);
+    return k ? "junapaino " + k : "junapaino ?";
+  }
   function tonnit(x) {
     return x == null ? "?" : Math.round(x).toLocaleString("fi-FI").replace(/\u00a0/g, " ");
   }
@@ -1227,7 +1231,9 @@
     return (
       '<div class="juna-row' + (v.veturina ? " is-veturina" : "") + '" data-auto="' + (info.yksin ? 1 : 0) + '">' +
       '<label>Junanumero <input class="j-num" value="' + escHtml(v.junanumero || "") + '" placeholder="esim. 3345"></label>' +
-      '<label class="j-paino-l">Paino (t) <input class="j-paino" inputmode="decimal" value="' + numFi(v.paino) + '" placeholder="todellinen"></label>' +
+      '<label class="j-paino-l">Junapaino <select class="j-paino">' +
+      ['<option value="">Valitse…</option>'].concat([3, 4, 5].map((k) => '<option value="' + k + '"' + (ShiftCalc.normJuna(v) && ShiftCalc.normJuna(v).jp === k ? " selected" : "") + ">" + ShiftCalc.JUNAPAINO_LABELS[k] + "</option>")).join("") +
+      "</select></label>" +
       '<label>Km <input class="j-km" inputmode="decimal" value="' + numFi(v.km) + '" placeholder="lähtö–tulo"></label>' +
       '<div class="juna-flags">' +
       '<span class="ajo-toggle" role="radiogroup" aria-label="Yksin- vai kaksinajo">' +
@@ -1290,7 +1296,7 @@
             const flags = [j.hidas && !j.veturina ? "hidas" : "", j.ivyvak && !j.veturina ? "IVY-VAK" : ""].filter(Boolean).join(", ");
             const what = j.veturina
               ? "veturina ajo" + (j.junanumero ? " " + escHtml(j.junanumero) : "")
-              : escHtml(j.junanumero || "Juna " + (i + 1)) + " · " + tonnit(j.paino) + " t";
+              : escHtml(j.junanumero || "Juna " + (i + 1)) + " · " + jpShort(j);
             return (
               "<br/>" + who + " · " + what + " · " + (j.km != null ? numFi(j.km) : "?") + " km" + (flags ? " · " + flags : "") +
               (t ? " → " + t.code + " · " + numFi(j.km) + " × " + rateFi(t.rate) + " = <b>" + eur(t.eur) + "</b>" : " → ei lasketa")
@@ -1327,7 +1333,7 @@
     }
     const editor =
       '<div class="juna-editor"' + (open ? "" : " hidden") + ' data-date="' + d.date + '">' +
-      '<p class="tot-help">Lisää päivän junat. Paino on junan todellinen paino jarrupainojärjestelmästä. Km on lähtö- ja tulopaikan välinen matka. Veturiraha = km × TES:n hinta. Veturina ajo: vain km.</p>' +
+      '<p class="tot-help">Lisää päivän junat. Junapaino jarrupainojärjestelmän kokonaisjunapainon mukaan. Km on lähtö- ja tulopaikan välinen matka. Veturiraha = km × TES:n hinta. Veturina ajo: vain km.</p>' +
       '<p class="juna-pair' + (info.yksin ? "" : " kaksin") + '">' + escHtml(pairHint(info)) + " (suunniteltu vuoro)</p>" +
       '<div class="juna-rows">' + (list.length ? list.map((j) => junaRowHtml(j, info)).join("") : autos.length ? "" : junaRowHtml(null, info)) + "</div>" +
       '<button type="button" class="j-add">+ Lisää juna</button>' +
@@ -1384,13 +1390,13 @@
       const vet = r.querySelector(".j-veturina").checked;
       const nm = (vet ? "Veturina ajo " : "Juna ") + (i + 1);
       const nro = r.querySelector(".j-num").value.trim();
-      const paino = vet ? null : num(r.querySelector(".j-paino").value);
+      const jp = vet ? null : parseInt(r.querySelector(".j-paino").value, 10) || null;
       const km = num(r.querySelector(".j-km").value);
-      if (!nro && paino == null && km == null) continue; // empty row
-      if (Number.isNaN(paino) || Number.isNaN(km)) return { err: nm + ": anna " + (vet ? "km" : "paino ja km") + " numeroina." };
-      if (!vet && paino == null) return { err: nm + ": anna paino (t)." };
+      if (!nro && jp == null && km == null) continue; // empty row
+      if (Number.isNaN(km)) return { err: nm + ": anna km numerona." };
+      if (!vet && jp == null) return { err: nm + ": valitse junapaino." };
       if (km == null) return { err: nm + ": anna km." };
-      const o = vet ? { junanumero: nro, km: km, veturina: true } : { junanumero: nro, paino: paino, km: km };
+      const o = vet ? { junanumero: nro, km: km, veturina: true } : { junanumero: nro, jp: jp, km: km };
       // Store yksin only as a manual override (differs from the sheet's auto value); otherwise auto.
       const sel = r.querySelector(".j-ajo:checked");
       const yk = sel ? sel.value === "yksin" : r.dataset.auto === "1";
@@ -1461,7 +1467,7 @@
       );
     const list = vr.trains
       .map((t) => {
-        const what = t.veturina ? (t.junanumero ? escHtml(t.junanumero) : "") : (t.junanumero ? escHtml(t.junanumero) + " · " : "") + tonnit(t.paino) + " t";
+        const what = t.veturina ? (t.junanumero ? escHtml(t.junanumero) : "") : (t.junanumero ? escHtml(t.junanumero) + " · " : "") + jpShort(t);
         return (
           "<tr><td><b>" + ShiftCalc.veturirahaTitle(t) + "</b><small>" + dayLabel(t.date) + (what ? " · " + what : "") + (t.auto ? "" : " · valittu käsin") + " · " + rateFi(t.rate) + " €/km</small></td>" +
           "<td>" + t.code + "</td><td>" + numFi(t.km) + '</td><td class="lisat-pay">' + eur(t.eur) + "</td></tr>"
@@ -1683,7 +1689,7 @@
       cls: "pv-sum",
       cells: ["<b>Yhteensä</b>", "", "", fmt(activeLm(p)), fmt(sumPerson(p, "hrs")), fmt(L.minutes.ilta), fmt(L.minutes.yo), fmt(L.minutes.la), fmt(L.minutes.su), fmt(L.minutes.aatto), sickCount(p) || ""],
     });
-    const trainRows = vr.trains.map((t) => [dayLabel(t.date), escHtml(t.junanumero || "–"), t.veturina ? "–" : tonnit(t.paino) + " t", "<b>" + (t.yksin ? "Yksinajo" : "Kaksinajo") + "</b>" + (t.veturina ? " · veturina ajo" : "") + (t.hidas && !t.veturina ? " · hidas" : "") + (t.ivyvak && !t.veturina ? " · IVY-VAK" : ""), t.code, numFi(t.km), eur(t.eur)]);
+    const trainRows = vr.trains.map((t) => [dayLabel(t.date), escHtml(t.junanumero || "–"), t.veturina ? "–" : jpShort(t), "<b>" + (t.yksin ? "Yksinajo" : "Kaksinajo") + "</b>" + (t.veturina ? " · veturina ajo" : "") + (t.hidas && !t.veturina ? " · hidas" : "") + (t.ivyvak && !t.veturina ? " · IVY-VAK" : ""), t.code, numFi(t.km), eur(t.eur)]);
     const autoRows = aa.trips.map((t) => [dayLabel(t.date), ShiftCalc.AUTOAJO_LABELS[t.tyyppi], numFi(t.km) + (t.paidKm !== t.km ? " → " + numFi(t.paidKm) : ""), "–", eur(t.eur)]);
     const C = ShiftCalc.LISA_CODES;
     const LE = personLisaEur(p, L);

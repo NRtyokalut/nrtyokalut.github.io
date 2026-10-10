@@ -512,3 +512,4 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .role-card .role-sum { font-weight: 400; color: var(--muted); font-size: 0.85rem; margin-left: 6px; }
 .role-card .lm-check { margin-top: 8px; }
 .lisat-grand td, .pv-grand td { border-top: 2px solid currentColor; font-size: 1.05em; }
+.juna-row select.j-paino { font-size: 0.9rem; padding: 6px 4px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%; min-width: 0; }
