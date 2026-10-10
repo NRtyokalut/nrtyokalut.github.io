@@ -732,7 +732,7 @@
   // --- Toteuma (actual times) + Lisät (TES) card ---
   // { [personKey]: { [yyyy-mm-dd]: toteuma } } — see ShiftCalc.lisatSummary. On-device only.
   const TOT_PREFIX = "nrtyokalut.toteuma.";
-  const TOT_CONFLICT_MSG = "Keskeytyspäivää ja toteumaa ei voi merkitä samalle päivälle.";
+  const TOT_CONFLICT_MSG = "Keskeytyspäivää ja poikkeamaa ei voi merkitä samalle päivälle.";
   let openTot = null;
   function loadTotMap() {
     if (!state) return {};
@@ -798,7 +798,7 @@
     const flash = dayFlash && dayFlash.id === p.id && dayFlash.date === d.date && dayFlash.tot ? dayFlash.msg : "";
     const btn =
       '<button type="button" class="tot-toggle' + (t ? " on" : "") + '" data-date="' + d.date + '">' +
-      (t ? "Toteuma ✓" : "Toteuma") + "</button>";
+      (t ? "Poikkeama ✓" : "+ Poikkeama") + "</button>";
     let line = "";
     if (t && !(t.type === "kutsu" && planned)) {
       const ev = lisat.events.filter((e) => e.date === d.date);
@@ -812,7 +812,7 @@
         : t.type === "vaihto" ? "<br/>Tunnit oman suunnitellun vuoron mukaan (kovat " + fmt(d.hrs) + " · tunnit yht. " + fmt(d.me) + "), lisät ajetun vuoron mukaan. Ei poikkeamakorvausta."
         : t.type === "peruttu" ? (t.late && t.korvaus ? "<br/>Tunnit eivät lasketa (tunnit yht. 0:00, suunniteltu " + fmt(d.me) + ")" : "<br/>Suunnitellut tunnit lasketaan (tunnit yht. " + fmt(d.me) + ")") : "";
       line =
-        '<div class="tot-line"><span class="tag tot">Toteuma</span> ' + totSummaryText(t) + hrsTxt +
+        '<div class="tot-line"><span class="tag tot">Poikkeama</span> ' + totSummaryText(t) + hrsTxt +
         (ev.filter((e) => e.eur).length ? "<br/>" + ev.filter((e) => e.eur).map((e) => "+ " + FIXED_LABEL[e.key] + " " + eur(e.eur)).join("<br/>") : "") +
         "</div>";
     }
@@ -824,14 +824,14 @@
       '<div class="tot-editor"' + (open ? "" : " hidden") + ' data-date="' + d.date + '">' +
       '<label class="tot-wide">Mitä tapahtui?<select class="tot-type">' +
       (planned
-        ? opt("", "Toteutui suunnitellusti (" + fmt(d.start) + "–" + fmt(d.end) + ")") +
+        ? opt("", "Ei poikkeamaa, suunnitellusti (" + fmt(d.start) + "–" + fmt(d.end) + ")") +
           opt("muutos", "Aika muuttui (työnjohdon määräys)") +
           opt("oma", "Oman vuoron aika muuttui omasta pyynnöstä") +
           opt("vaihto", "Vaihdettu vuoro (työkaverin kanssa)") +
           opt("korvattu", "Peruttu, tilalle annettiin toinen vuoro") +
           opt("peruttu_late", "Peruttu klo 17 jälkeen edellisenä päivänä, ei uutta vuoroa") +
           opt("peruttu_ok", "Peruttu ajoissa (ennen klo 17)")
-        : opt("", "Vapaapäivä") + opt("kutsu", "Kutsuttu vapaapäivänä")) +
+        : opt("", "Vapaapäivä, ei poikkeamaa") + opt("kutsu", "Kutsuttu vapaapäivänä")) +
       "</select></label>" +
       (planned
         ? '<p class="tot-help" data-for="oma">Oma vuorosi alkoi tai päättyi eri aikaan pyynnöstäsi. Toteutuneet tunnit lasketaan kovina tunteina, tunteina yhteensä ja ylitöinä. Poikkeamakorvausta ei makseta.</p>' +
@@ -1345,7 +1345,7 @@
       : "";
     $("detailLisat").innerHTML =
       "<h3>Lisät (TES)</h3>" +
-      '<p class="ot-meta">Vertaa palkkalaskelman määriin. Tunnit lasketaan yhteen koko jaksolta ja pyöristetään kerran (§24): alle 30 min alas, 30 min tai yli ylös. Toteuma-merkinnät korvaavat suunnitellun ajan.</p>' +
+      '<p class="ot-meta lisat-note">Vertaa palkkalaskelman määriin. Tunnit lasketaan yhteen koko jaksolta ja pyöristetään kerran (§24): alle 30 min alas, 30 min tai yli ylös. Poikkeama-merkinnät korvaavat suunnitellun ajan.</p>' +
       '<table class="lisat-table"><thead><tr><th>Tuntilisä</th><th>Koodi</th><th>Tehty</th><th>Maksetaan</th></tr></thead><tbody>' +
       hourRows +
       "</tbody></table>" +
@@ -1359,7 +1359,7 @@
       kplHtml(personKpl(p)) +
       '<div class="vr-block">' + veturirahaHtml(personVeturiraha(p)) + autoajoHtml(personAutoajo(p)) + "</div>" +
       palkkioHtml(p) +
-      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, Tunnit yhteensä -luvun ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
+      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>+ Poikkeama</b>-napista. Poikkeaman tunnit lasketaan myös kovien tuntien, Tunnit yhteensä -luvun ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
   }
 
   // --- Lataa PDF: print view (window.print → "Tallenna PDF:nä"), works offline ---
@@ -1440,7 +1440,7 @@
       '<header class="pv-head"><h1>Jakso päiväkirja</h1><p><b>' + escHtml(p.name) + "</b> · " + (state.group ? escHtml(state.group) + " · " : "") + (state.periodLabel ? escHtml(state.periodLabel) + " · " : "") + jaksoRange() +
       (flags ? " · " + flags : "") + "</p><p class=\"pv-meta\">Tulostettu " + dateFi(new Date().toISOString().slice(0, 10)) + "</p></header>" +
       "<h2>Päivät</h2>" +
-      pvTable(["Päivä", "Suunniteltu", "Toteuma", "Tunnit yht.", "Kovat", "Ilta", "Yö", "La", "Su", "Aatto", "Kesk."], dayRows, "pv-days") +
+      pvTable(["Päivä", "Suunniteltu", "Poikkeama", "Tunnit yht.", "Kovat", "Ilta", "Yö", "La", "Su", "Aatto", "Kesk."], dayRows, "pv-days") +
       "<h2>Junat ja ajot</h2>" +
       (trainRows.length ? pvTable(["Päivä", "Juna", "Paino", "Ajo", "Koodi", "Km", "€"], trainRows) : '<p class="pv-meta">Ei junia.</p>') +
       (autoRows.length ? "<h2>Autolla-ajo</h2>" + pvTable(["Päivä", "Ajo", "Km", "Koodi", "€"], autoRows) : "") +

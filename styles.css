@@ -488,3 +488,9 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
   .pv-vert { font-size: 8pt; }
   .pv-vert td small { font-size: 7pt; }
 }
+
+/* Help texts/hints: hidden while <body class="hide-help">. Remove the class to show them again.
+   Warnings/errors (.extra-err, .lisat-events.warn, .alerts) stay visible. */
+.hide-help .tot-help,
+.hide-help .lisat-note,
+.hide-help .help { display: none !important; }
