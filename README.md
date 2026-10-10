@@ -33,4 +33,4 @@ Vertaa laskentaa LibreOffice-uudelleenlaskettuun v6-työkirjaan (`golden.json`).
 - `sw.js` / `manifest.webmanifest` / `icons/` — PWA
 
 ---
-© 2026 Lämpöpumppu Mafia. Kaikki oikeudet pidätetään. All rights reserved. Katso LICENSE.
+© 2026 Lämpöpumppu Mafia (Y-tunnus 3336940-2). Kaikki oikeudet pidätetään. All rights reserved. Katso LICENSE.
