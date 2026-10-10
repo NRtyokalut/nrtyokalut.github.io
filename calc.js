@@ -1399,22 +1399,66 @@
     return Object.keys(sickDateSet(days, marks)).sort();
   }
 
-  /** Sum a day field, skipping sick planned shifts. */
-  function sumActive(days, marks, key, extras, holidayMap) {
-    const sick = sickDateSet(days, marks);
-    let total = (days || []).reduce(function (a, d) {
-      if (sick[d.date] || d[key] == null) return a;
-      return a + d[key];
-    }, 0);
-    if (extras) {
-      (days || []).forEach(function (d) {
-        if (sick[d.date]) return;
-        const ex = extras[d.date];
-        if (!ex || ex.start == null || ex.end == null) return;
-        const fig = computeShiftFigures(d.dateObj || d.date, ex.start, ex.end, holidayMap || {});
-        if (fig && fig[key] != null) total += fig[key];
-      });
+  /**
+   * The shift that counts for a day (Toteuma applied), or null.
+   *   no toteuma / peruttu → planned shift (kind "plan"; peruttu keeps the planned hours, local agreement)
+   *   muutos / korvattu    → actual times (kind "actual")
+   *   kutsu on a day off   → actual times, or the told times when no actual given (kind "kutsu")
+   */
+  function countedShift(d, toteumat) {
+    const t = normToteuma(toteumat && toteumat[d.date]);
+    if (d.start != null) {
+      if (t && (t.type === "muutos" || t.type === "korvattu")) return { kind: "actual", start: t.start, end: t.end, t: t };
+      return { kind: "plan", start: d.start, end: d.end, t: t };
     }
+    if (t && t.type === "kutsu") {
+      return { kind: "kutsu", start: t.aStart != null ? t.aStart : t.start, end: t.aEnd != null ? t.aEnd : t.end, t: t };
+    }
+    return null;
+  }
+
+  /**
+   * Double-count guard: a lisävuoro that overlaps the day's counted shift
+   * (planned, actual or kutsu) is not counted anywhere. Returns true when ignored.
+   */
+  function extraOverlaps(d, ex, toteumat) {
+    if (!ex || ex.start == null || ex.end == null) return false;
+    const c = countedShift(d, toteumat);
+    if (!c) return false;
+    const a = shiftSpan(c.start, c.end);
+    const b = shiftSpan(ex.start, ex.end);
+    return Math.min(a.e, b.e) - Math.max(a.s, b.s) > 0;
+  }
+
+  /**
+   * Sum a day field, skipping keskeytyspäivät. Toteuma (optional) replaces planned times
+   * (muutos/korvattu) or adds a kutsu shift; a cancelled shift keeps its planned hours.
+   * "company" for a changed planned shift = sheet figure + (actual LM − planned LM),
+   * so the sheet's Erotus is unchanged. App-only shifts: Yritys follows LM.
+   */
+  function sumActive(days, marks, key, extras, holidayMap, toteumat) {
+    const sick = sickDateSet(days, marks);
+    let total = 0;
+    (days || []).forEach(function (d) {
+      if (sick[d.date]) return;
+      const c = countedShift(d, toteumat);
+      if (c && c.kind === "plan") {
+        if (d[key] != null) total += d[key];
+      } else if (c) {
+        const fig = computeShiftFigures(d.dateObj || d.date, c.start, c.end, holidayMap || {});
+        if (fig) {
+          if (c.kind === "actual" && key === "company") {
+            if (d.company != null) total += d.company + (fig.me - d.me);
+          } else if (c.kind === "actual" && key === "check") {
+            if (d.check != null) total += d.check;
+          } else if (fig[key] != null) total += fig[key];
+        }
+      }
+      const ex = extras && extras[d.date];
+      if (!ex || ex.start == null || ex.end == null || extraOverlaps(d, ex, toteumat)) return;
+      const fx = computeShiftFigures(d.dateObj || d.date, ex.start, ex.end, holidayMap || {});
+      if (fx && fx[key] != null) total += fx[key];
+    });
     return total;
   }
 
@@ -1549,8 +1593,8 @@
   /**
    * Lisät for one person over the jakso.
    * days: computePerson rows; marks: keskeytys map; extras: lisävuorot; toteumat: { date: toteuma }.
-   * Keskeytyspäivä drops the day. Kutsu on a day that also has a lisävuoro: the kutsu wins
-   * (same shift is not counted twice).
+   * Keskeytyspäivä drops the day. A lisävuoro overlapping the day's counted shift is not
+   * counted (extraOverlaps), same rule as the hour totals.
    */
   function lisatSummary(days, marks, extras, toteumat, holidayMap) {
     const mins = { ilta: 0, yo: 0, la: 0, su: 0, aatto: 0 };
@@ -1610,7 +1654,7 @@
       }
       const ex = extras && extras[d.date];
       if (ex && ex.start != null && ex.end != null) {
-        if (!planned && t && t.type === "kutsu") notes.push({ date: d.date, msg: "kutsu ja lisävuoro samalla päivällä – lisävuoroa ei laskettu lisiin kahteen kertaan" });
+        if (extraOverlaps(d, ex, toteumat)) notes.push({ date: d.date, msg: "lisävuoro on päällekkäin toteutuneen vuoron kanssa – sitä ei lasketa kahteen kertaan" });
         else addMin(d.date, ex.start, ex.end);
       }
     });
@@ -1689,5 +1733,7 @@
     TOTEUMA_TYPES,
     normToteuma,
     lisatSummary,
+    countedShift,
+    extraOverlaps,
   };
 });

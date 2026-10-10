@@ -219,7 +219,7 @@
     return ShiftCalc.restWithExtras(p.days, personExtras(p), personMarks(p));
   }
   function sumPerson(p, key) {
-    return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap);
+    return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap, personTots(p));
   }
   function stewardN(p) {
     const days = ShiftCalc.OT_CONFIG.periodDays;
@@ -671,6 +671,8 @@
       (fig ? "Lisävuoro ✓" : "+ Lisävuoro") +
       "</button>";
     let block = "";
+    const dd = p.days.find((x) => x.date === date);
+    const ignored = fig && dd && ShiftCalc.extraOverlaps(dd, ex, personTots(p));
     if (fig) {
       block +=
         '<div class="extra-shift"><div class="extra-head"><span class="tag extra">Lisävuoro</span> <b>' +
@@ -684,7 +686,9 @@
         "<div><span>Yritys</span><b>" + fmt(fig.company) + "</b></div>" +
         "<div><span>Lauantai h</span><b>" + fmt(fig.b25) + "</b></div>" +
         "<div><span>Pyhä h</span><b>" + fmt(fig.b100) + "</b></div>" +
-        "</div></div>";
+        "</div>" +
+        (ignored ? '<p class="extra-note">Lisävuoro on päällekkäin toteutuneen vuoron kanssa, joten sitä ei lasketa. Tunnit lasketaan vain kerran.</p>' : "") +
+        "</div>";
     }
     const editor =
       '<div class="extra-editor"' +
@@ -778,8 +782,13 @@
     let line = "";
     if (t && !(t.type === "kutsu" && planned)) {
       const ev = lisat.events.filter((e) => e.date === d.date);
+      const c = ShiftCalc.countedShift(d, personTots(p));
+      const fig = c && c.kind !== "plan" ? ShiftCalc.computeShiftFigures(d.date, c.start, c.end, state.holidayMap) : null;
+      const hrsTxt = fig
+        ? "<br/>Lasketaan: kovat " + fmt(fig.hrs) + " · LM " + fmt(fig.me) + (planned ? " (suunniteltu LM " + fmt(d.me) + ")" : "")
+        : t.type === "peruttu" ? "<br/>Suunnitellut tunnit lasketaan (LM " + fmt(d.me) + ")" : "";
       line =
-        '<div class="tot-line"><span class="tag tot">Toteuma</span> ' + totSummaryText(t) +
+        '<div class="tot-line"><span class="tag tot">Toteuma</span> ' + totSummaryText(t) + hrsTxt +
         (ev.length ? "<br/>" + ev.map((e) => "+ " + FIXED_LABEL[e.key] + " " + eur(e.eur)).join("<br/>") : "") +
         "</div>";
     }
@@ -911,7 +920,7 @@
       "</tbody></table>" +
       evs +
       notes +
-      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuma vaikuttaa vain tähän korttiin: kovat tunnit, LM ja ylityöt lasketaan vuorolistasta ja lisävuoroista. Jos kutsuvuoro kuuluu myös ylitöihin, lisää se lisäksi lisävuorona – lisiin sitä ei lasketa kahdesti.</p>';
+      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, LM:n ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Peruttu vuoro pitää suunnitellut tunnit. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
   }
 
   function openDetail(personId) {
