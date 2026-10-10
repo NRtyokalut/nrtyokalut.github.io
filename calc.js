@@ -1671,6 +1671,44 @@
     { from: "2026-09-01", ilta: 4.574, yo: 0.51, la: 7.623, su: 30.49, aatto: 30.49 },
     { from: "2027-08-01", ilta: 4.683, yo: 0.52, la: 7.805, su: 31.22, aatto: 31.22 },
   ];
+  /** Yhtiön kiinteä lisä, sama kaikille (palkkalaskelma palkkalaji 1026, 200 €/kk; ei TES-erä, ei korotuksia).
+   *  Ei kuulu tuntipalkan /163 perusteeseen (Pekka vahvisti). */
+  const NR_LISA = { code: "1026", eur: 200 };
+  const PALKKA_STORAGE_KEY = "nrtyokalut.palkka";
+  const TAYDENNYS_DEFAULT = 6.92; // arvio, palkkalaskelman perusteella
+  /** Yksinkertainen tuntipalkka = kuukausipalkka / 163, sentin tarkkuudella (§6). */
+  function tuntipalkka(kk) {
+    return Math.round((kk / 163) * 100) / 100;
+  }
+  /** Wage periods [{ from, kk, td }] sorted; returns the row valid on date (before the first row: the first row). */
+  function wageRowFor(list, key) {
+    const rows = (list || []).filter(function (r) { return r && r.kk > 0; }).sort(function (a, b) { return (a.from || "") < (b.from || "") ? -1 : 1; });
+    if (!rows.length) return null;
+    let r = rows[0];
+    rows.forEach(function (x) {
+      if (!x.from || key >= x.from) r = x;
+    });
+    return r;
+  }
+  /**
+   * €/h rates for one day. With a saved wage: base = tuntipalkka + täydennysosa → ilta 15 %, la 25 %, su/aatto 100 %;
+   * yö stays the TES €/h. Without a wage: the payslip-derived LISA_EUR_RATES. key identifies the rate set.
+   */
+  function lisaRatesForDay(key, wages) {
+    const tes = lisaEurRatesFor(key);
+    const w = wageRowFor(wages, key);
+    if (!w) return { key: tes.from, from: tes.from, rates: tes, wage: null };
+    const tp = tuntipalkka(w.kk);
+    const td = w.td != null && isFinite(w.td) ? w.td : TAYDENNYS_DEFAULT;
+    const base = Math.round((tp + td) * 100) / 100;
+    const from = (w.from || "0000-00-00") > tes.from ? w.from || "0000-00-00" : tes.from;
+    return {
+      key: tes.from + "|" + (w.from || ""),
+      from: from,
+      rates: { ilta: base * 0.15, yo: tes.yo, la: base * 0.25, su: base, aatto: base },
+      wage: { kk: w.kk, tp: tp, td: td, base: base },
+    };
+  }
   function lisaEurRatesFor(key) {
     let r = LISA_EUR_RATES[0];
     LISA_EUR_RATES.forEach(function (x) {
@@ -1683,7 +1721,7 @@
    * paid hours are split between the prices in proportion to the minutes worked in each period.
    * minutesByPeriod: { [rateFrom]: minutes{} }, hours: rounded hours{} from lisatSummary.
    */
-  function lisaEuro(minutesByPeriod, hours) {
+  function lisaEuro(minutesByPeriod, hours, periodInfo) {
     const out = {};
     let total = 0;
     LISA_KEYS.forEach(function (k) {
@@ -1695,8 +1733,11 @@
         const m = minutesByPeriod[f][k] || 0;
         if (!m || !mins) return;
         const h = (hours[k] || 0) * (m / mins);
-        const rate = lisaEurRatesFor(f)[k];
-        parts.push({ from: f, hours: h, rate: rate });
+        const info = periodInfo && periodInfo[f];
+        const rate = info ? info.rates[k] : lisaEurRatesFor(f)[k];
+        const same = parts.find(function (x) { return x.rate === rate; });
+        if (same) same.hours += h;
+        else parts.push({ from: info ? info.from : f, hours: h, rate: rate });
         e += h * rate;
       });
       if (!parts.length) parts.push({ from: null, hours: 0, rate: null });
@@ -2253,6 +2294,12 @@
     LISA_EUR_RATES,
     lisaEurRatesFor,
     lisaEuro,
+    lisaRatesForDay,
+    wageRowFor,
+    tuntipalkka,
+    NR_LISA,
+    PALKKA_STORAGE_KEY,
+    TAYDENNYS_DEFAULT,
     lisaShiftMinutes,
     roundTes24,
     TOTEUMA_TYPES,

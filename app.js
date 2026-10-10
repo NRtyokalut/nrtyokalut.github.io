@@ -763,17 +763,104 @@
     return ShiftCalc.lisatSummary(p.days, personMarks(p), personExtras(p), personTots(p), state.holidayMap);
   }
   /** ARVIO: € for the hour lisät, priced by date (see ShiftCalc.LISA_EUR_RATES). */
+  // Palkka-asetukset: { rows: [{ from: "yyyy-mm-dd" | "", kk: €/kk, td: €/h }] }. NR-lisä is a fixed constant.
+  function loadPalkka() {
+    try {
+      const v = JSON.parse(localStorage.getItem(ShiftCalc.PALKKA_STORAGE_KEY) || "null");
+      return v && Array.isArray(v.rows) ? v : { rows: [] };
+    } catch (e) {
+      return { rows: [] };
+    }
+  }
+  function savePalkka(v) {
+    try {
+      if (!v.rows.length) localStorage.removeItem(ShiftCalc.PALKKA_STORAGE_KEY);
+      else localStorage.setItem(ShiftCalc.PALKKA_STORAGE_KEY, JSON.stringify(v));
+    } catch (e) {}
+  }
+  const hasWage = () => loadPalkka().rows.some((r) => r.kk > 0);
   function personLisaEur(p, L) {
+    const wages = loadPalkka().rows;
     const by = {};
+    const info = {};
     p.days.forEach((d) => {
-      const f = ShiftCalc.lisaEurRatesFor(d.date).from;
-      (by[f] = by[f] || []).push(d);
+      const r = ShiftCalc.lisaRatesForDay(d.date, wages);
+      info[r.key] = r;
+      (by[r.key] = by[r.key] || []).push(d);
     });
     const mins = {};
     Object.keys(by).forEach((f) => {
       mins[f] = ShiftCalc.lisatSummary(by[f], personMarks(p), personExtras(p), personTots(p), state.holidayMap).minutes;
     });
-    return ShiftCalc.lisaEuro(mins, L.hours);
+    return ShiftCalc.lisaEuro(mins, L.hours, info);
+  }
+  function numIn(x) {
+    return x == null || x === "" ? "" : String(x).replace(".", ",");
+  }
+  function renderPalkka() {
+    const box = $("palkkaBox");
+    if (!box) return;
+    const v = loadPalkka();
+    const rows = v.rows.length ? v.rows : [{ from: "", kk: null, td: ShiftCalc.TAYDENNYS_DEFAULT }];
+    const nr = ShiftCalc.NR_LISA;
+    const rowHtml = (r) =>
+      '<div class="palkka-row">' +
+      '<label>Voimassa alkaen <input type="date" class="pk-from" value="' + (r.from || "") + '"></label>' +
+      '<label>Kuukausipalkka (€/kk) <input class="pk-kk" inputmode="decimal" value="' + numIn(r.kk) + '" placeholder="esim. 3702,52"></label>' +
+      '<label>Täydennysosa (€/h) <span class="arvio">arvio</span> <input class="pk-td" inputmode="decimal" value="' + numIn(r.td != null ? r.td : ShiftCalc.TAYDENNYS_DEFAULT) + '"></label>' +
+      (r.kk > 0
+        ? '<p class="palkka-derived">Tuntipalkka ' + eur(ShiftCalc.tuntipalkka(r.kk)) + " (kk / 163) · lisien perusta " + eur(Math.round((ShiftCalc.tuntipalkka(r.kk) + (r.td != null ? r.td : ShiftCalc.TAYDENNYS_DEFAULT)) * 100) / 100) + "/h</p>"
+        : "") +
+      '<button type="button" class="j-remove pk-del" aria-label="Poista rivi">✕</button></div>';
+    box.innerHTML =
+      "<summary>Palkka-asetukset" + (hasWage() ? "" : ' <span class="arvio">ei asetettu</span>') + "</summary>" +
+      '<div class="palkka-rows">' + rows.map(rowHtml).join("") + "</div>" +
+      '<p class="palkka-fixed">NR-lisä ' + eur(nr.eur) + "/kk (palkkalaji " + nr.code + ") · automaattinen, ei mukana tuntipalkassa</p>" +
+      '<div class="ot-actions"><button type="button" class="ot-save" id="pkSave">Tallenna</button><button type="button" class="ot-reset" id="pkAdd">+ Palkkajakso</button></div>' +
+      '<p class="tot-help">Lisää uusi rivi, kun palkka muuttuu (esim. 1.9.2026, 1.8.2027). Ennen ensimmäistä riviä käytetään ensimmäistä riviä. Ilman palkkaa käytetään palkkalaskelmasta arvioituja hintoja.</p>' +
+      '<p class="extra-err" id="pkErr" hidden></p>';
+  }
+  function readPalkka() {
+    const out = [];
+    const num = (t) => {
+      t = t.trim().replace(/\s/g, "").replace(",", ".");
+      if (t === "") return null;
+      const n = Number(t);
+      return isFinite(n) && n >= 0 ? n : NaN;
+    };
+    for (const row of $("palkkaBox").querySelectorAll(".palkka-row")) {
+      const kk = num(row.querySelector(".pk-kk").value);
+      const td = num(row.querySelector(".pk-td").value);
+      if (kk == null) continue;
+      if (Number.isNaN(kk) || Number.isNaN(td) || kk <= 0) return { err: "Anna kuukausipalkka ja täydennysosa numeroina." };
+      out.push({ from: row.querySelector(".pk-from").value || "", kk: kk, td: td == null ? ShiftCalc.TAYDENNYS_DEFAULT : td });
+    }
+    return { rows: out.sort((a, b) => (a.from < b.from ? -1 : 1)) };
+  }
+  /** Kiinteä palkka (€/kk) for the month of the jakso end + the jakso's lisät total. */
+  function kiinteaHtml(p, lisatTotal, pdf) {
+    const endKey = state.dates[state.dates.length - 1];
+    const w = ShiftCalc.wageRowFor(loadPalkka().rows, endKey);
+    const pr = ShiftCalc.palkkioFor(endKey);
+    const items = [];
+    if (w) items.push(["Kuukausipalkka", "1020", w.kk]);
+    items.push(["NR-lisä", ShiftCalc.NR_LISA.code, ShiftCalc.NR_LISA.eur]);
+    if (isSteward(p)) items.push(["Luottamusmiespalkkio", "–", pr]);
+    if (isTsv(p)) items.push(["Työsuojeluvaltuutetun palkkio", "–", pr]);
+    const sum = Math.round(items.reduce((a, x) => a + x[2], 0) * 100) / 100;
+    const head = ["Kiinteä palkka (€/kk)", "Koodi", "€/kk"];
+    const rows = items.map((x) => [x[0], x[1], eur(x[2])]);
+    rows.push({ cls: pdf ? "pv-sum" : "lisat-sum", cells: ["<b>Yhteensä / kk</b>" + (w ? "" : " <small>(kuukausipalkka puuttuu)</small>"), "", eur(sum)] });
+    rows.push({ cls: pdf ? "pv-sum" : "lisat-sum", cells: ["<b>Jakson lisät yhteensä</b> <small>(tuntilisät arvio + korvaukset + päivystysrahat + veturiraha + autolla-ajo)</small>", "", eur(lisatTotal)] });
+    if (pdf) return pvTable(head, rows);
+    return (
+      '<table class="lisat-table kiintea-table"><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
+      rows.map((r) => "<tr" + (r.cls ? ' class="' + r.cls + '"' : "") + ">" + (r.cells || r).map((c, i) => "<td" + (i === 2 ? ' class="lisat-pay"' : "") + ">" + c + "</td>").join("") + "</tr>").join("") +
+      "</tbody></table>"
+    );
+  }
+  function jaksoLisatTotal(p, L, LE) {
+    return Math.round((LE.total + L.fixedTotal + personKpl(p).eur + personVeturiraha(p).eur + personAutoajo(p).eur) * 100) / 100;
   }
   const ARVIO = '<span class="arvio">arvio</span>';
   function lisaRateText(it) {
@@ -1374,7 +1461,7 @@
       '<table class="lisat-table lisat-hours"><thead><tr><th>Tuntilisä</th><th>Koodi</th><th>Tehty</th><th>Maks.</th><th>€</th></tr></thead><tbody>' +
       hourRows +
       "</tbody></table>" +
-      '<p class="arvio-note">Hinnat arvioitu palkkalaskelman perusteella (perusta 29,63 €/h ennen 1.9.2026, sitten +2,9 %; täydennysosa vahvistamatta).</p>' +
+      '<p class="arvio-note">' + (hasWage() ? "Hinnat arvioitu palkka-asetusten perusteella (täydennysosa vahvistamatta)." : "Hinnat arvioitu palkkalaskelman perusteella (perusta 29,63 €/h ennen 1.9.2026, sitten +2,9 %; täydennysosa vahvistamatta).") + "</p>" +
       '<table class="lisat-table"><thead><tr><th>Korvaus</th><th>Koodi</th><th>Määrä</th><th>€</th></tr></thead><tbody>' +
       fixedRows +
       '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(L.fixedTotal) + "</td></tr>" +
@@ -1384,6 +1471,7 @@
       kplHtml(personKpl(p)) +
       '<div class="vr-block">' + veturirahaHtml(personVeturiraha(p)) + autoajoHtml(personAutoajo(p)) + "</div>" +
       palkkioHtml(p) +
+      kiinteaHtml(p, jaksoLisatTotal(p, L, LE)) +
       '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>+ Poikkeama</b>-napista. Poikkeaman tunnit lasketaan myös kovien tuntien, Tunnit yhteensä -luvun ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
   }
 
@@ -1474,7 +1562,7 @@
       (autoRows.length ? "<h2>Autolla-ajo</h2>" + pvTable(["Päivä", "Ajo", "Km", "Koodi", "€"], autoRows) : "") +
       "<h2>Lisät (TES)</h2>" +
       pvTable(["Tuntilisä", "Koodi", "Tehty", "Maksetaan", "€"], lisaRows) +
-      '<p class="pv-meta">Tuntilisien hinnat arvioitu palkkalaskelman perusteella (perusta 29,63 €/h ennen 1.9.2026, sitten +2,9 %; täydennysosa vahvistamatta).</p>' +
+      '<p class="pv-meta">Tuntilisien hinnat arvioitu ' + (hasWage() ? "palkka-asetusten" : "palkkalaskelman") + " perusteella (täydennysosa vahvistamatta).</p>" +
       pvTable(["Korvaus", "Koodi", "Määrä", "€"], fixedRows.concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(L.fixedTotal)] }])) +
       (kp.rows.length
         ? pvTable(["Päivystysrahat ja tarkastuspalkkiot", "Koodi", "Kpl", "€"], kp.rows.map((r) => [r.label + " <small>" + eur(r.rate) + " / kpl" + (kp.rows.filter((x) => x.key === r.key).length > 1 ? " · " + dateFi(r.from).slice(0, 6) + " alk." : "") + "</small>", r.code, r.n, eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(kp.eur)] }])) +
@@ -1498,7 +1586,8 @@
         ["Ylityö 100 %", fmtOt(ot, "yli100")],
       ], "pv-narrow") +
       '<p class="pv-meta">' + overtimeText(state.otEffective) + (isSteward(p) ? " · " + stewardLine(p) : "") + "</p>" +
-      (pk.length ? "<h2>Palkkiot</h2>" + pvTable(["Palkkio", "€/kk", ""], pk) + '<p class="pv-meta">Palkkiot ovat kuukausikohtaisia, eivät jaksokohtaisia.</p>' : "");
+      (pk.length ? "<h2>Palkkiot</h2>" + pvTable(["Palkkio", "€/kk", ""], pk) + '<p class="pv-meta">Palkkiot ovat kuukausikohtaisia, eivät jaksokohtaisia.</p>' : "") +
+      "<h2>Kiinteä palkka ja jakson lisät</h2>" + kiinteaHtml(p, jaksoLisatTotal(p, L, LE), true);
     printDoc("Jakso päiväkirja – " + p.name + " – " + jaksoRange(), html);
   }
 
@@ -1703,6 +1792,26 @@
       setSteward(p, $("lmCheck").checked);
       paintTotals();
       renderLisat(p, personLisat(p));
+    };
+    renderPalkka();
+    $("palkkaBox").onclick = (e) => {
+      if (e.target.id === "pkAdd") {
+        $("palkkaBox").querySelector(".palkka-rows").insertAdjacentHTML("beforeend",
+          '<div class="palkka-row"><label>Voimassa alkaen <input type="date" class="pk-from"></label><label>Kuukausipalkka (€/kk) <input class="pk-kk" inputmode="decimal"></label><label>Täydennysosa (€/h) <span class="arvio">arvio</span> <input class="pk-td" inputmode="decimal" value="' + numIn(ShiftCalc.TAYDENNYS_DEFAULT) + '"></label><button type="button" class="j-remove pk-del" aria-label="Poista rivi">✕</button></div>');
+      } else if (e.target.classList.contains("pk-del")) {
+        e.target.closest(".palkka-row").remove();
+      } else if (e.target.id === "pkSave") {
+        const r = readPalkka();
+        if (r.err) {
+          $("pkErr").hidden = false;
+          $("pkErr").textContent = r.err;
+          return;
+        }
+        savePalkka({ rows: r.rows });
+        renderPalkka();
+        $("palkkaBox").open = true;
+        renderLisat(p, personLisat(p));
+      }
     };
     $("tsvCheck").checked = isTsv(p);
     $("tsvCheck").onchange = () => {

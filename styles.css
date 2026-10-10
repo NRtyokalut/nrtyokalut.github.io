@@ -497,3 +497,12 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 
 .arvio { display: inline-block; font-size: 0.68rem; font-weight: 700; color: #8a5a00; background: #fff1d6; border: 1px solid #f0c978; border-radius: 999px; padding: 0 6px; vertical-align: middle; }
 .arvio-note { font-size: 0.78rem; color: #8a5a00; margin: 4px 0 10px; }
+
+.palkka-card { padding: 10px 12px; margin: 8px 0; }
+.palkka-card summary { font-weight: 700; cursor: pointer; }
+.palkka-row { position: relative; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 6px 10px; margin: 8px 0; padding: 8px 30px 8px 8px; border: 1px solid var(--line); border-radius: 10px; }
+.palkka-row label { display: flex; flex-direction: column; font-size: 0.8rem; color: var(--muted); }
+.palkka-row input { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; }
+.palkka-row .j-remove { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 0.75rem; cursor: pointer; }
+.palkka-derived { grid-column: 1 / -1; margin: 0; font-size: 0.82rem; color: #1d6b34; font-weight: 600; }
+.palkka-fixed { font-size: 0.82rem; margin: 4px 0; }
