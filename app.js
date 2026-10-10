@@ -1,4 +1,4 @@
-/*! © 2026 Pekka Rautiainen. Kaikki oikeudet pidätetään. All rights reserved.
+/*! © 2026 Lämpöpumppu Mafia. Kaikki oikeudet pidätetään. All rights reserved.
  * Tämän ohjelmiston kopioiminen, muokkaaminen tai jakaminen ilman lupaa on kielletty. */
 /* global ShiftCalc, XLSX */
 (function () {

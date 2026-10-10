@@ -1,4 +1,4 @@
-const CACHE = "nrtyokalut-v45";
+const CACHE = "nrtyokalut-v46";
 const ASSETS = [
   "./",
   "./index.html",
@@ -47,4 +47,4 @@ self.addEventListener("fetch", (e) => {
   );
 });
 
-/*! © 2026 Pekka Rautiainen. Kaikki oikeudet pidätetään. All rights reserved. */
+/*! © 2026 Lämpöpumppu Mafia. Kaikki oikeudet pidätetään. All rights reserved. */
