@@ -1657,6 +1657,55 @@
   ];
   const LATE_END_MIN = 30;
 
+  /**
+   * ARVIO – tuntilisien €/h. Korjaa tähän, kun tuntipalkka ja täydennysosa vahvistetaan.
+   * Perusta (§6.5): yksinkertainen tuntipalkka ~22,71 €/h + täydennysosa ~6,92 €/h (vahvistamaton) = 29,63 €/h,
+   * takaisinlaskettu palkkalaskelmasta (maksupäivä 15.9.2026, elokuun lisät vanhoilla hinnoilla).
+   *  - ennen 1.9.2026: palkkalaskelman rivit (summa ÷ tunnit): 1400 Su 296,30/10 = 29,63; 1420 Ilta 53,34/12 = 4,445;
+   *    1430 La 66,67/9 = 7,408; 1421 Yö 12,50/25 = 0,50. Aatto ei palkkalaskelmassa → 100 % × 29,63.
+   *  - 1.9.2026: perusta 29,63 × 1,029 = 30,49 (TES +2,9 %); ilta 15 %, la 25 %, su/aatto 100 %; yö TES-taulukko 0,51.
+   *  - 1.8.2027: perusta 30,49 × 1,024 = 31,22 (≈ TES-taulukon euromääräisten lisien korotus); yö TES-taulukko 0,52.
+   */
+  const LISA_EUR_RATES = [
+    { from: "0000-00-00", ilta: 4.445, yo: 0.5, la: 7.408, su: 29.63, aatto: 29.63 },
+    { from: "2026-09-01", ilta: 4.574, yo: 0.51, la: 7.623, su: 30.49, aatto: 30.49 },
+    { from: "2027-08-01", ilta: 4.683, yo: 0.52, la: 7.805, su: 31.22, aatto: 31.22 },
+  ];
+  function lisaEurRatesFor(key) {
+    let r = LISA_EUR_RATES[0];
+    LISA_EUR_RATES.forEach(function (x) {
+      if (key >= x.from) r = x;
+    });
+    return r;
+  }
+  /**
+   * € per tuntilisä. Hours are rounded once per jakso (§24); when the jakso spans a price change, the
+   * paid hours are split between the prices in proportion to the minutes worked in each period.
+   * minutesByPeriod: { [rateFrom]: minutes{} }, hours: rounded hours{} from lisatSummary.
+   */
+  function lisaEuro(minutesByPeriod, hours) {
+    const out = {};
+    let total = 0;
+    LISA_KEYS.forEach(function (k) {
+      let mins = 0;
+      Object.keys(minutesByPeriod).forEach(function (f) { mins += minutesByPeriod[f][k] || 0; });
+      let e = 0;
+      const parts = [];
+      Object.keys(minutesByPeriod).sort().forEach(function (f) {
+        const m = minutesByPeriod[f][k] || 0;
+        if (!m || !mins) return;
+        const h = (hours[k] || 0) * (m / mins);
+        const rate = lisaEurRatesFor(f)[k];
+        parts.push({ from: f, hours: h, rate: rate });
+        e += h * rate;
+      });
+      if (!parts.length) parts.push({ from: null, hours: 0, rate: null });
+      out[k] = { eur: round2(e), parts: parts };
+      total += round2(e);
+    });
+    return { items: out, total: round2(total) };
+  }
+
   function fixedRatesFor(key) {
     let r = FIXED_RATES[0];
     FIXED_RATES.forEach(function (x) {
@@ -2201,6 +2250,9 @@
     LISA_CODES,
     FIXED_RATES,
     fixedRatesFor,
+    LISA_EUR_RATES,
+    lisaEurRatesFor,
+    lisaEuro,
     lisaShiftMinutes,
     roundTes24,
     TOTEUMA_TYPES,

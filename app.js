@@ -762,6 +762,25 @@
   function personLisat(p) {
     return ShiftCalc.lisatSummary(p.days, personMarks(p), personExtras(p), personTots(p), state.holidayMap);
   }
+  /** ARVIO: € for the hour lisät, priced by date (see ShiftCalc.LISA_EUR_RATES). */
+  function personLisaEur(p, L) {
+    const by = {};
+    p.days.forEach((d) => {
+      const f = ShiftCalc.lisaEurRatesFor(d.date).from;
+      (by[f] = by[f] || []).push(d);
+    });
+    const mins = {};
+    Object.keys(by).forEach((f) => {
+      mins[f] = ShiftCalc.lisatSummary(by[f], personMarks(p), personExtras(p), personTots(p), state.holidayMap).minutes;
+    });
+    return ShiftCalc.lisaEuro(mins, L.hours);
+  }
+  const ARVIO = '<span class="arvio">arvio</span>';
+  function lisaRateText(it) {
+    const ps = it.parts.filter((x) => x.rate != null);
+    if (!ps.length) return "";
+    return ps.map((x) => rateFi(Math.round(x.rate * 1000) / 1000) + " €/h" + (ps.length > 1 ? " (" + dateFi(x.from === "0000-00-00" ? state.startDate : x.from).slice(0, 6) + "–)" : "")).join(" · ");
+  }
   function eur(x) {
     return x.toFixed(2).replace(".", ",") + " €";
   }
@@ -1309,12 +1328,18 @@
       ["su", "Sunnuntaityökorvaus", "su ja pyhät klo 0–24 + edellinen päivä klo 18–24 · §20"],
       ["aatto", "Aattopäivänlisä", "pääsiäislauantai, juhannus- ja jouluaatto klo 0–18 · §21"],
     ];
+    const LE = personLisaEur(p, L);
     const hourRows = rows
-      .map((r) =>
-        "<tr><td><b>" + r[1] + "</b><small>" + r[2] + "</small></td><td>" + (C[r[0]] || "–") + "</td><td>" +
-        fmt(L.minutes[r[0]]) + '</td><td class="lisat-pay">' + L.hours[r[0]] + " h</td></tr>"
-      )
-      .join("");
+      .map((r) => {
+        const it = LE.items[r[0]];
+        const rt = lisaRateText(it);
+        return (
+          "<tr><td><b>" + r[1] + "</b> " + ARVIO + "<small>" + r[2] + (rt ? " · " + rt : "") + "</small></td><td>" + (C[r[0]] || "–") + "</td><td>" +
+          fmt(L.minutes[r[0]]) + "</td><td>" + L.hours[r[0]] + ' h</td><td class="lisat-pay">' + eur(it.eur) + "</td></tr>"
+        );
+      })
+      .join("") +
+      '<tr class="lisat-sum"><td colspan="4"><b>Tuntilisät yhteensä</b> ' + ARVIO + '</td><td class="lisat-pay">' + eur(LE.total) + "</td></tr>";
     const rateText = (f) => {
       const r = Object.keys(f.rates);
       return r.length === 1 ? f.n + " × " + r[0].replace(".", ",") + " €" : f.n + " kpl";
@@ -1346,10 +1371,10 @@
     $("detailLisat").innerHTML =
       "<h3>Lisät (TES)</h3>" +
       '<p class="ot-meta lisat-note">Vertaa palkkalaskelman määriin. Tunnit lasketaan yhteen koko jaksolta ja pyöristetään kerran (§24): alle 30 min alas, 30 min tai yli ylös. Poikkeama-merkinnät korvaavat suunnitellun ajan.</p>' +
-      '<table class="lisat-table"><thead><tr><th>Tuntilisä</th><th>Koodi</th><th>Tehty</th><th>Maksetaan</th></tr></thead><tbody>' +
+      '<table class="lisat-table lisat-hours"><thead><tr><th>Tuntilisä</th><th>Koodi</th><th>Tehty</th><th>Maks.</th><th>€</th></tr></thead><tbody>' +
       hourRows +
       "</tbody></table>" +
-      '<p class="ot-meta lisat-note">Tuntilisien euromäärät lisätään, kun tuntipalkka ja täydennysosa on vahvistettu.</p>' +
+      '<p class="arvio-note">Hinnat arvioitu palkkalaskelman perusteella (perusta 29,63 €/h ennen 1.9.2026, sitten +2,9 %; täydennysosa vahvistamatta).</p>' +
       '<table class="lisat-table"><thead><tr><th>Korvaus</th><th>Koodi</th><th>Määrä</th><th>€</th></tr></thead><tbody>' +
       fixedRows +
       '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(L.fixedTotal) + "</td></tr>" +
@@ -1428,7 +1453,10 @@
     const trainRows = vr.trains.map((t) => [dayLabel(t.date), escHtml(t.junanumero || "–"), t.veturina ? "–" : tonnit(t.paino) + " t", "<b>" + (t.yksin ? "Yksinajo" : "Kaksinajo") + "</b>" + (t.veturina ? " · veturina ajo" : "") + (t.hidas && !t.veturina ? " · hidas" : "") + (t.ivyvak && !t.veturina ? " · IVY-VAK" : ""), t.code, numFi(t.km), eur(t.eur)]);
     const autoRows = aa.trips.map((t) => [dayLabel(t.date), ShiftCalc.AUTOAJO_LABELS[t.tyyppi], numFi(t.km) + (t.paidKm !== t.km ? " → " + numFi(t.paidKm) : ""), "–", eur(t.eur)]);
     const C = ShiftCalc.LISA_CODES;
-    const lisaRows = [["ilta", "Iltatyölisä"], ["yo", "Yötyölisä"], ["la", "Lauantaityökorvaus"], ["su", "Sunnuntaityökorvaus"], ["aatto", "Aattopäivänlisä"]].map((r) => [r[1], C[r[0]] || "–", fmt(L.minutes[r[0]]), L.hours[r[0]] + " h"]);
+    const LE = personLisaEur(p, L);
+    const lisaRows = [["ilta", "Iltatyölisä"], ["yo", "Yötyölisä"], ["la", "Lauantaityökorvaus"], ["su", "Sunnuntaityökorvaus"], ["aatto", "Aattopäivänlisä"]]
+      .map((r) => [r[1] + " <small>arvio · " + lisaRateText(LE.items[r[0]]) + "</small>", C[r[0]] || "–", fmt(L.minutes[r[0]]), L.hours[r[0]] + " h", eur(LE.items[r[0]].eur)])
+      .concat([{ cls: "pv-sum", cells: ["<b>Tuntilisät yhteensä (arvio)</b>", "", "", "", eur(LE.total)] }]);
     const fixedRows = ["poikkeama", "vapaa", "peruutus"].map((k) => [FIXED_LABEL[k], C[k], L.fixed[k].n + " kpl", eur(L.fixed[k].eur)]);
     const endKey = state.dates[state.dates.length - 1];
     const rates = ShiftCalc.palkkioRatesInRange(state.startDate, endKey).map((r, i) => eur(r.eur) + "/kk" + (i ? " " + dateFi(r.from).slice(0, 6) + " alkaen" : "")).join(", ");
@@ -1445,7 +1473,8 @@
       (trainRows.length ? pvTable(["Päivä", "Juna", "Paino", "Ajo", "Koodi", "Km", "€"], trainRows) : '<p class="pv-meta">Ei junia.</p>') +
       (autoRows.length ? "<h2>Autolla-ajo</h2>" + pvTable(["Päivä", "Ajo", "Km", "Koodi", "€"], autoRows) : "") +
       "<h2>Lisät (TES)</h2>" +
-      pvTable(["Tuntilisä", "Koodi", "Tehty", "Maksetaan"], lisaRows) +
+      pvTable(["Tuntilisä", "Koodi", "Tehty", "Maksetaan", "€"], lisaRows) +
+      '<p class="pv-meta">Tuntilisien hinnat arvioitu palkkalaskelman perusteella (perusta 29,63 €/h ennen 1.9.2026, sitten +2,9 %; täydennysosa vahvistamatta).</p>' +
       pvTable(["Korvaus", "Koodi", "Määrä", "€"], fixedRows.concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(L.fixedTotal)] }])) +
       (kp.rows.length
         ? pvTable(["Päivystysrahat ja tarkastuspalkkiot", "Koodi", "Kpl", "€"], kp.rows.map((r) => [r.label + " <small>" + eur(r.rate) + " / kpl" + (kp.rows.filter((x) => x.key === r.key).length > 1 ? " · " + dateFi(r.from).slice(0, 6) + " alk." : "") + "</small>", r.code, r.n, eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(kp.eur)] }])) +
