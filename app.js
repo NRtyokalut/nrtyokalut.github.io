@@ -450,7 +450,7 @@
   }
 
   /**
-   * Alerts from the SAME source as the overview grid: restBefore (+ check mismatches).
+   * Alerts from the SAME source as the overview grid: restBefore. (LM≠Yritys check moved to the Tarkastus app.)
    * One alert per flagged arrival day; Finnish date + actual rest duration.
    */
   function renderAlerts(target, result, personId) {
@@ -458,12 +458,6 @@
     result.people.forEach((p) => {
       if (personId && p.id !== personId) return;
       const rest = personRest(p);
-      ShiftCalc.sheetMismatches(p.days).forEach((d) => {
-        items.push({
-          bad: false,
-          text: p.name + ": Tarkista erotus " + dateFi(d.date) + " = " + fmt(d.check),
-        });
-      });
       p.days.forEach((d) => {
         if (isSickDay(p, d)) return;
         const r = rest[d.date] || {};
@@ -508,12 +502,6 @@
   function personProblems(p) {
     const problems = [];
     const rest = personRest(p);
-    ShiftCalc.sheetMismatches(p.days).forEach((d) => {
-      problems.push({
-        kind: "md",
-        text: "Tarkista erotus " + dateFi(d.date).replace(/\.\d{4}$/, ".") + " = " + fmt(d.check),
-      });
-    });
     p.days.forEach((d) => {
       if (isSickDay(p, d)) return;
       const r = rest[d.date] || {};
@@ -578,7 +566,6 @@
       const sum = (key) => sumPerson(p, key);
       const hrs = sum("hrs");
       const me = sum("me");
-      const company = sum("company");
       const night = sum("night");
       const b25 = sum("b25");
       const b100 = sum("b100");
@@ -620,11 +607,8 @@
         "<div><span>Kovat tunnit</span><b>" +
         fmt(hrs) +
         "</b></div>" +
-        "<div><span>LM</span><b>" +
+        "<div><span>Tunnit yhteensä</span><b>" +
         fmt(activeLm(p)) +
-        "</b></div>" +
-        "<div><span>Yritys</span><b>" +
-        fmt(activeCompany(p)) +
         "</b></div>" +
         "<div><span>Yö h</span><b>" +
         fmt(night) +
@@ -701,8 +685,7 @@
         '</b></div><div class="day-grid">' +
         "<div><span>Kovat tunnit</span><b>" + fmt(fig.hrs) + "</b></div>" +
         "<div><span>Yö h</span><b>" + fmt(fig.night) + "</b></div>" +
-        "<div><span>LM</span><b>" + fmt(fig.me) + "</b></div>" +
-        "<div><span>Yritys</span><b>" + fmt(fig.company) + "</b></div>" +
+        "<div><span>Tunnit yhteensä</span><b>" + fmt(fig.me) + "</b></div>" +
         "<div><span>Lauantai h</span><b>" + fmt(fig.b25) + "</b></div>" +
         "<div><span>Pyhä h</span><b>" + fmt(fig.b100) + "</b></div>" +
         "</div>" +
@@ -809,11 +792,11 @@
       const fig = c && c.kind !== "plan" ? ShiftCalc.computeShiftFigures(d.date, c.start, c.end, state.holidayMap) : null;
       const korv = c && c.kind === "korvattu" && fig;
       const hrsTxt = korv
-        ? "<br/>Lasketaan vähintään suunnitellun mukaan: kovat " + fmt(Math.max(d.hrs, fig.hrs)) + " · LM " + fmt(Math.max(d.me, fig.me)) + " (suunniteltu " + fmt(d.me) + ", uusi vuoro " + fmt(fig.me) + "). Lisät lajeittain suuremman mukaan, km uuden vuoron mukaan."
+        ? "<br/>Lasketaan vähintään suunnitellun mukaan: kovat " + fmt(Math.max(d.hrs, fig.hrs)) + " · tunnit yht. " + fmt(Math.max(d.me, fig.me)) + " (suunniteltu " + fmt(d.me) + ", uusi vuoro " + fmt(fig.me) + "). Lisät lajeittain suuremman mukaan, km uuden vuoron mukaan."
         : fig
-        ? "<br/>Lasketaan: kovat " + fmt(fig.hrs) + " · LM " + fmt(fig.me) + (planned ? " (suunniteltu LM " + fmt(d.me) + ")" : "")
-        : t.type === "vaihto" ? "<br/>Tunnit oman suunnitellun vuoron mukaan (kovat " + fmt(d.hrs) + " · LM " + fmt(d.me) + "), lisät ajetun vuoron mukaan. Ei poikkeamakorvausta."
-        : t.type === "peruttu" ? (t.late && t.korvaus ? "<br/>Tunnit eivät lasketa (LM 0:00, suunniteltu " + fmt(d.me) + ")" : "<br/>Suunnitellut tunnit lasketaan (LM " + fmt(d.me) + ")") : "";
+        ? "<br/>Lasketaan: kovat " + fmt(fig.hrs) + " · tunnit yht. " + fmt(fig.me) + (planned ? " (suunniteltu " + fmt(d.me) + ")" : "")
+        : t.type === "vaihto" ? "<br/>Tunnit oman suunnitellun vuoron mukaan (kovat " + fmt(d.hrs) + " · tunnit yht. " + fmt(d.me) + "), lisät ajetun vuoron mukaan. Ei poikkeamakorvausta."
+        : t.type === "peruttu" ? (t.late && t.korvaus ? "<br/>Tunnit eivät lasketa (tunnit yht. 0:00, suunniteltu " + fmt(d.me) + ")" : "<br/>Suunnitellut tunnit lasketaan (tunnit yht. " + fmt(d.me) + ")") : "";
       line =
         '<div class="tot-line"><span class="tag tot">Toteuma</span> ' + totSummaryText(t) + hrsTxt +
         (ev.filter((e) => e.eur).length ? "<br/>" + ev.filter((e) => e.eur).map((e) => "+ " + FIXED_LABEL[e.key] + " " + eur(e.eur)).join("<br/>") : "") +
@@ -837,9 +820,9 @@
         : opt("", "Vapaapäivä") + opt("kutsu", "Kutsuttu vapaapäivänä")) +
       "</select></label>" +
       (planned
-        ? '<p class="tot-help" data-for="oma">Oma vuorosi alkoi tai päättyi eri aikaan pyynnöstäsi. Toteutuneet tunnit lasketaan kovina tunteina, LM:nä ja ylitöinä. Poikkeamakorvausta ei makseta.</p>' +
-          '<p class="tot-help" data-for="korvattu">Vuoro peruttiin ja tilalle annettiin toinen vuoro. Anna uuden vuoron alku ja loppu. Tunnit ja lisät vähintään suunnitellun vuoron mukaan, km uuden vuoron mukaan. Kovat tunnit, Yö h ja LM ovat suunnitellun (' + fmt(d.start) + "–" + fmt(d.end) + ') ja uuden vuoron suurempi. Ilta-, yö-, la-, su- ja aattolisät lasketaan lajeittain suuremman mukaan. Poikkeamakorvaus, jos uusi vuoro alkaa aiemmin tai päättyy vähintään 30 min myöhemmin. Ei vapaa-ajan korvausta.</p>' +
-          '<p class="tot-help" data-for="vaihto">Ajoit työkaverin vuoron (pidemmän tai lyhyemmän) ja hän ajoi sinun. Anna ajetun vuoron alku ja loppu. Kovat tunnit, Yö h ja LM lasketaan oman suunnitellun vuorosi mukaan (' + fmt(d.start) + "–" + fmt(d.end) + ', LM ' + fmt(d.me) + '), joten vaihto ei lisää eikä vähennä ylitöitä (Lisälehti 11). Ilta-, yö-, la-, su- ja aattolisät lasketaan ajetun vuoron mukaan. Ei poikkeama- eikä vapaa-ajan korvausta.</p>'
+        ? '<p class="tot-help" data-for="oma">Oma vuorosi alkoi tai päättyi eri aikaan pyynnöstäsi. Toteutuneet tunnit lasketaan kovina tunteina, tunteina yhteensä ja ylitöinä. Poikkeamakorvausta ei makseta.</p>' +
+          '<p class="tot-help" data-for="korvattu">Vuoro peruttiin ja tilalle annettiin toinen vuoro. Anna uuden vuoron alku ja loppu. Tunnit ja lisät vähintään suunnitellun vuoron mukaan, km uuden vuoron mukaan. Kovat tunnit, Yö h ja Tunnit yhteensä ovat suunnitellun (' + fmt(d.start) + "–" + fmt(d.end) + ') ja uuden vuoron suurempi. Ilta-, yö-, la-, su- ja aattolisät lasketaan lajeittain suuremman mukaan. Poikkeamakorvaus, jos uusi vuoro alkaa aiemmin tai päättyy vähintään 30 min myöhemmin. Ei vapaa-ajan korvausta.</p>' +
+          '<p class="tot-help" data-for="vaihto">Ajoit työkaverin vuoron (pidemmän tai lyhyemmän) ja hän ajoi sinun. Anna ajetun vuoron alku ja loppu. Kovat tunnit, Yö h ja Tunnit yhteensä lasketaan oman suunnitellun vuorosi mukaan (' + fmt(d.start) + "–" + fmt(d.end) + ', tunnit yhteensä ' + fmt(d.me) + '), joten vaihto ei lisää eikä vähennä ylitöitä (Lisälehti 11). Ilta-, yö-, la-, su- ja aattolisät lasketaan ajetun vuoron mukaan. Ei poikkeama- eikä vapaa-ajan korvausta.</p>'
         : '<p class="tot-help" data-for="">Vaihtoa vapaapäivälle ei voi merkitä. Merkitse vaihto sille päivälle, jolla oma vuorosi oli.</p>') +
       (planned
         ? '<label data-for="muutos oma korvattu vaihto">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
@@ -878,8 +861,8 @@
     }
     return (
       '<fieldset class="tot-choice" data-for="peruttu_late"><legend>Valitse jompikumpi</legend>' +
-      '<label><input type="radio" name="pk-' + d.date + '" class="tot-korv" value="0"' + (korv ? "" : " checked") + "> Tunnit lasketaan (paikallinen sopimus)<small>Suunnitellut tunnit ja LM " + fmt(d.me) + " lasketaan, ei peruutuskorvausta eikä ilta-/yö-/la-/su-lisiä.</small></label>" +
-      '<label><input type="radio" name="pk-' + d.date + '" class="tot-korv" value="1"' + (korv ? " checked" : "") + "> Työvuoron peruutuskorvaus " + eur(rate) + " (tunnit eivät lasketa)<small>Koodi 1313. Vuoron tunnit 0:00 kovissa tunneissa, LM:ssä ja ylitöissä.</small></label>" +
+      '<label><input type="radio" name="pk-' + d.date + '" class="tot-korv" value="0"' + (korv ? "" : " checked") + "> Tunnit lasketaan (paikallinen sopimus)<small>Suunnitellut tunnit (yhteensä " + fmt(d.me) + ") lasketaan, ei peruutuskorvausta eikä ilta-/yö-/la-/su-lisiä.</small></label>" +
+      '<label><input type="radio" name="pk-' + d.date + '" class="tot-korv" value="1"' + (korv ? " checked" : "") + "> Työvuoron peruutuskorvaus " + eur(rate) + " (tunnit eivät lasketa)<small>Koodi 1313. Vuoron tunnit 0:00 kovissa tunneissa, tunneissa yhteensä ja ylitöissä.</small></label>" +
       (hint ? '<p class="tot-hint">' + hint + "</p>" : "") +
       "</fieldset>"
     );
@@ -954,6 +937,297 @@
     );
   }
 
+  // --- Junat (veturiraha) + autolla-ajo ---
+  // Junat: { [personKey]: { [yyyy-mm-dd]: [{ junanumero, paino, km, yksin?, hidas?, ivyvak?, veturina? }] } }
+  // yksin is stored only as a manual override; missing = auto from the sheet (same planned shift as someone → kaksinajo).
+  // veturina: true = veturina ajo (veturi ilman junaa), km only, no paino.
+  // Same shape a future Railcube import can write: one array of trains per day. paino = todellinen
+  // jarrupainojärjestelmän kokonaisjunapaino (t), km = lähtö- ja tulopaikan välinen matka.
+  // Autolla-ajo is kept in its own key so a Railcube train import can't wipe it:
+  // { [personKey]: { [yyyy-mm-dd]: [{ tyyppi: "paikallis" | "ulko", km }] } }, one entry per one-way trip.
+  // All on-device only.
+  const JUNA_PREFIX = "nrtyokalut.junat.";
+  const AUTOAJO_PREFIX = "nrtyokalut.autoajo.";
+  let openJuna = null;
+  let junaUid = 0;
+  function escHtml(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+  }
+  function loadDayListMap(prefix) {
+    if (!state) return {};
+    try {
+      return JSON.parse(localStorage.getItem(prefix + state.startDate) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveDayList(prefix, p, date, list) {
+    const map = loadDayListMap(prefix);
+    const key = laskKey(p);
+    const cur = Object.assign({}, map[key] || {});
+    if (list && list.length) cur[date] = list;
+    else delete cur[date];
+    if (Object.keys(cur).length) map[key] = cur;
+    else delete map[key];
+    try {
+      const k = prefix + state.startDate;
+      if (!Object.keys(map).length) localStorage.removeItem(k);
+      else localStorage.setItem(k, JSON.stringify(map));
+    } catch (e) {}
+  }
+  function personJunat(p) {
+    return loadDayListMap(JUNA_PREFIX)[laskKey(p)] || {};
+  }
+  function saveJunat(p, date, list) {
+    saveDayList(JUNA_PREFIX, p, date, list);
+  }
+  function personAutoajot(p) {
+    return loadDayListMap(AUTOAJO_PREFIX)[laskKey(p)] || {};
+  }
+  function saveAutoajot(p, date, list) {
+    saveDayList(AUTOAJO_PREFIX, p, date, list);
+  }
+  function pairInfo(p, date) {
+    return ShiftCalc.pairPartners(state.people, p, date);
+  }
+  function pairHint(info) {
+    if (!info.planned) return "Yksinajo: ei suunniteltua vuoroa tänä päivänä";
+    return info.yksin ? "Yksinajo: ei samaa vuoroa" : "Kaksinajo: sama vuoro kuin " + info.partners.join(", ");
+  }
+  function personVeturiraha(p) {
+    return ShiftCalc.veturirahaSummary(
+      personJunat(p),
+      (date) => isSickDay(p, { date: date }),
+      (date) => pairInfo(p, date).yksin
+    );
+  }
+  function personAutoajo(p) {
+    return ShiftCalc.autoajoSummary(personAutoajot(p), (date) => isSickDay(p, { date: date }));
+  }
+  function numFi(x) {
+    return x == null ? "" : String(Math.round(x * 1000) / 1000).replace(".", ",");
+  }
+  function rateFi(x) {
+    return String(x).replace(".", ",");
+  }
+  function tonnit(x) {
+    return x == null ? "?" : Math.round(x).toLocaleString("fi-FI").replace(/\u00a0/g, " ");
+  }
+  /** info = pairInfo(): the auto default; a saved j.yksin (true/false) is a manual choice and wins. */
+  function junaRowHtml(j, info) {
+    const v = j || {};
+    const manual = v.yksin === true || v.yksin === false;
+    const on = manual ? v.yksin : info.yksin;
+    const uid = ++junaUid;
+    return (
+      '<div class="juna-row' + (v.veturina ? " is-veturina" : "") + '" data-auto="' + (info.yksin ? 1 : 0) + '">' +
+      '<label>Junanumero <input class="j-num" value="' + escHtml(v.junanumero || "") + '" placeholder="esim. 3345"></label>' +
+      '<label class="j-paino-l">Paino (t) <input class="j-paino" inputmode="decimal" value="' + numFi(v.paino) + '" placeholder="todellinen"></label>' +
+      '<label>Km <input class="j-km" inputmode="decimal" value="' + numFi(v.km) + '" placeholder="lähtö–tulo"></label>' +
+      '<div class="juna-flags">' +
+      '<span class="ajo-toggle" role="radiogroup" aria-label="Yksin- vai kaksinajo">' +
+      '<label><input type="radio" class="j-ajo" name="ajo-' + uid + '" value="yksin"' + (on ? " checked" : "") + "><span>Yksinajo</span></label>" +
+      '<label><input type="radio" class="j-ajo" name="ajo-' + uid + '" value="kaksin"' + (on ? "" : " checked") + "><span>Kaksinajo</span></label>" +
+      "</span>" +
+      '<label><input type="checkbox" class="j-veturina"' + (v.veturina ? " checked" : "") + "> Veturina ajo (ilman junaa)</label>" +
+      '<label class="j-train-only"><input type="checkbox" class="j-hidas"' + (v.hidas ? " checked" : "") + "> Hidas (enint. 40 km/h)</label>" +
+      '<label class="j-train-only"><input type="checkbox" class="j-ivyvak"' + (v.ivyvak ? " checked" : "") + "> IVY-VAK</label>" +
+      "</div>" +
+      '<small class="j-hint">' + escHtml(junaHintText(info, manual ? v.yksin : null)) + "</small>" +
+      '<button type="button" class="j-remove" aria-label="Poista rivi">✕</button>' +
+      "</div>"
+    );
+  }
+  function autoRowHtml(a) {
+    const v = a || { tyyppi: "paikallis" };
+    const opt = (k, label) => '<option value="' + k + '"' + (v.tyyppi === k ? " selected" : "") + ">" + label + "</option>";
+    return (
+      '<div class="juna-row auto-row">' +
+      '<label class="a-type-l">Ajo <select class="a-type">' +
+      opt("paikallis", "Paikallisajo") +
+      opt("ulko", "Ulkopuolinen, 1 suunta") +
+      "</select></label>" +
+      '<label>Km <input class="a-km" inputmode="decimal" value="' + numFi(v.km) + '" placeholder="todellinen"></label>' +
+      '<button type="button" class="j-remove" aria-label="Poista rivi">✕</button>' +
+      "</div>"
+    );
+  }
+  function junaHintText(info, manualYksin) {
+    if (manualYksin == null || manualYksin === info.yksin) return pairHint(info);
+    return "Valittu käsin: " + (manualYksin ? "Yksinajo" : "Kaksinajo") + " (vuorotaulun mukaan " + (info.yksin ? "Yksinajo" : "Kaksinajo") + ")";
+  }
+  function junaBits(p, d, vr, aa) {
+    const info = pairInfo(p, d.date);
+    const list = (personJunat(p)[d.date] || []).map(ShiftCalc.normJuna).filter(Boolean);
+    const autos = (personAutoajot(p)[d.date] || []).map(ShiftCalc.normAutoajo).filter(Boolean);
+    const n = list.length + autos.length;
+    const open = openJuna && openJuna.id === p.id && openJuna.date === d.date;
+    const btn =
+      '<button type="button" class="juna-toggle' + (n ? " on" : "") + '" data-date="' + d.date + '">' +
+      (n ? "Ajot ✓ " + n : "+ Juna") + "</button>";
+    let line = "";
+    if (n) {
+      const counted = vr.trains.filter((t) => t.date === d.date);
+      const cAuto = aa.trips.filter((t) => t.date === d.date);
+      const dayEur = counted.reduce((s, t) => s + t.eur, 0) + cAuto.reduce((s, t) => s + t.eur, 0);
+      line =
+        '<div class="juna-line"><span class="tag juna">Ajot</span> ' +
+        list
+          .map((j, i) => {
+            const t = counted.find((x) => x.i === i);
+            const yk = j.yksin != null ? j.yksin : info.yksin;
+            const who = "<b>" + (yk ? "Yksinajo" : "Kaksinajo") + "</b>" + (j.yksin != null && j.yksin !== info.yksin ? " (käsin)" : "");
+            const flags = [j.hidas && !j.veturina ? "hidas" : "", j.ivyvak && !j.veturina ? "IVY-VAK" : ""].filter(Boolean).join(", ");
+            const what = j.veturina
+              ? "veturina ajo" + (j.junanumero ? " " + escHtml(j.junanumero) : "")
+              : escHtml(j.junanumero || "Juna " + (i + 1)) + " · " + tonnit(j.paino) + " t";
+            return (
+              "<br/>" + who + " · " + what + " · " + (j.km != null ? numFi(j.km) : "?") + " km" + (flags ? " · " + flags : "") +
+              (t ? " → " + t.code + " · " + numFi(j.km) + " × " + rateFi(t.rate) + " = <b>" + eur(t.eur) + "</b>" : " → ei lasketa")
+            );
+          })
+          .join("") +
+        autos
+          .map((a, i) => {
+            const t = cAuto.find((x) => x.i === i);
+            return (
+              "<br/>Autolla: " + ShiftCalc.AUTOAJO_LABELS[a.tyyppi].toLowerCase() + " · " + numFi(a.km) + " km" +
+              (t ? " → " + (t.paidKm !== a.km ? "väh. " + ShiftCalc.AUTOAJO_MIN_KM + " km: " : "") + numFi(t.paidKm) + " × " + rateFi(t.rate) + " = <b>" + eur(t.eur) + "</b>" : " → ei lasketa")
+            );
+          })
+          .join("") +
+        (counted.length + cAuto.length > 1 ? "<br/>Päivä yhteensä <b>" + eur(dayEur) + "</b>" : "") +
+        "</div>";
+    }
+    const editor =
+      '<div class="juna-editor"' + (open ? "" : " hidden") + ' data-date="' + d.date + '">' +
+      '<p class="tot-help">Lisää päivän junat. Paino on junan todellinen paino jarrupainojärjestelmästä. Km on lähtö- ja tulopaikan välinen matka. Veturiraha = km × TES:n hinta. Veturina ajo: vain km.</p>' +
+      '<p class="juna-pair' + (info.yksin ? "" : " kaksin") + '">' + escHtml(pairHint(info)) + " (suunniteltu vuoro)</p>" +
+      '<div class="juna-rows">' + (list.length ? list.map((j) => junaRowHtml(j, info)).join("") : autos.length ? "" : junaRowHtml(null, info)) + "</div>" +
+      '<button type="button" class="j-add">+ Lisää juna</button>' +
+      '<h4 class="auto-head">Autolla-ajo <small>(vain auton kuljettaja, miehistönvaihto)</small></h4>' +
+      '<div class="auto-rows">' + autos.map(autoRowHtml).join("") + "</div>" +
+      '<button type="button" class="a-add">+ Lisää autolla-ajo</button>' +
+      '<div class="ot-actions"><button type="button" class="ot-save j-save" data-date="' + d.date + '">Tallenna</button>' +
+      (n ? '<button type="button" class="ot-reset j-del" data-date="' + d.date + '">Poista kaikki</button>' : "") +
+      "</div>" +
+      "</div>";
+    return { btn: btn, body: line + editor, n: n };
+  }
+  function readJunaEditor(box) {
+    const out = [];
+    const autos = [];
+    const num = (s) => {
+      const t = s.trim().replace(/\s/g, "").replace(",", ".");
+      if (t === "") return null;
+      const n = Number(t);
+      return isFinite(n) && n > 0 ? n : NaN;
+    };
+    const rows = box.querySelectorAll(".juna-rows .juna-row");
+    for (let i = 0; i < rows.length; i++) {
+      const r = rows[i];
+      const vet = r.querySelector(".j-veturina").checked;
+      const nm = (vet ? "Veturina ajo " : "Juna ") + (i + 1);
+      const nro = r.querySelector(".j-num").value.trim();
+      const paino = vet ? null : num(r.querySelector(".j-paino").value);
+      const km = num(r.querySelector(".j-km").value);
+      if (!nro && paino == null && km == null) continue; // empty row
+      if (Number.isNaN(paino) || Number.isNaN(km)) return { err: nm + ": anna " + (vet ? "km" : "paino ja km") + " numeroina." };
+      if (!vet && paino == null) return { err: nm + ": anna paino (t)." };
+      if (km == null) return { err: nm + ": anna km." };
+      const o = vet ? { junanumero: nro, km: km, veturina: true } : { junanumero: nro, paino: paino, km: km };
+      // Store yksin only as a manual override (differs from the sheet's auto value); otherwise auto.
+      const sel = r.querySelector(".j-ajo:checked");
+      const yk = sel ? sel.value === "yksin" : r.dataset.auto === "1";
+      if (yk !== (r.dataset.auto === "1")) o.yksin = yk;
+      if (!vet && r.querySelector(".j-hidas").checked) o.hidas = true;
+      if (!vet && r.querySelector(".j-ivyvak").checked) o.ivyvak = true;
+      out.push(o);
+    }
+    const arows = box.querySelectorAll(".auto-rows .auto-row");
+    for (let i = 0; i < arows.length; i++) {
+      const km = num(arows[i].querySelector(".a-km").value);
+      if (km == null) continue;
+      if (Number.isNaN(km)) return { err: "Autolla-ajo " + (i + 1) + ": anna km numerona." };
+      autos.push({ tyyppi: arows[i].querySelector(".a-type").value === "ulko" ? "ulko" : "paikallis", km: km });
+    }
+    return { value: out, autos: autos };
+  }
+  const WD_JS = ["Su", "Ma", "Ti", "Ke", "To", "Pe", "La"];
+  function dayLabel(iso) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+    if (!m) return iso;
+    const d = new Date(+m[1], +m[2] - 1, +m[3]);
+    return WD_JS[d.getDay()] + " " + +m[3] + "." + +m[2] + ".";
+  }
+  function notesHtml(notes) {
+    return notes.length ? '<ul class="lisat-events warn">' + notes.map((n) => "<li>" + dayLabel(n.date) + " · " + escHtml(n.msg) + "</li>").join("") + "</ul>" : "";
+  }
+  /** Per-pay-code summary rows (rounded per code, as on the payslip). */
+  function codeRows(rows, labelOf, codeOf, unit) {
+    const multi = {};
+    rows.forEach((r) => (multi[codeOf(r)] = (multi[codeOf(r)] || 0) + 1));
+    return rows
+      .map(
+        (r) =>
+          "<tr><td><b>" + labelOf(r) + "</b><small>" + r.n + " " + (typeof unit === "function" ? unit(r) : unit)[r.n === 1 ? 0 : 1] + " · " + rateFi(r.rate) + " €/km" +
+          (multi[codeOf(r)] > 1 ? " · " + dateFi(r.from).slice(0, 6) + " alk." : "") +
+          "</small></td><td>" + (r.code || "–") + "</td><td>" + numFi(r.km) + '</td><td class="lisat-pay">' + eur(r.eur) + "</td></tr>"
+      )
+      .join("");
+  }
+  function veturirahaHtml(vr) {
+    const vrNotes = notesHtml(vr.notes);
+    if (!vr.rows.length)
+      return (
+        '<table class="lisat-table"><thead><tr><th>Veturiraha</th><th>Koodi</th><th>Km</th><th>€</th></tr></thead><tbody>' +
+        '<tr><td colspan="4"><small>Ei laskettavia junia. Lisää päivän junat <b>+ Juna</b>-napista (junanumero, paino, km).</small></td></tr></tbody></table>' +
+        vrNotes
+      );
+    const list = vr.trains
+      .map((t) => {
+        const what = t.veturina ? (t.junanumero ? escHtml(t.junanumero) : "") : (t.junanumero ? escHtml(t.junanumero) + " · " : "") + tonnit(t.paino) + " t";
+        return (
+          "<tr><td><b>" + ShiftCalc.veturirahaTitle(t) + "</b><small>" + dayLabel(t.date) + (what ? " · " + what : "") + (t.auto ? "" : " · valittu käsin") + " · " + rateFi(t.rate) + " €/km</small></td>" +
+          "<td>" + t.code + "</td><td>" + numFi(t.km) + '</td><td class="lisat-pay">' + eur(t.eur) + "</td></tr>"
+        );
+      })
+      .join("");
+    return (
+      '<table class="lisat-table vr-list"><thead><tr><th>Veturiraha · junat ja ajot</th><th>Koodi</th><th>Km</th><th>€</th></tr></thead><tbody>' +
+      list +
+      "</tbody></table>" +
+      '<table class="lisat-table vr-codes"><thead><tr><th>Veturiraha palkkalajeittain</th><th>Koodi</th><th>Km</th><th>€</th></tr></thead><tbody>' +
+      codeRows(vr.rows, (r) => r.label, (r) => r.code, (r) => (r.code === 1456 || r.code === 1463 ? ["ajo", "ajoa"] : ["juna", "junaa"])) +
+      '<tr class="lisat-sum"><td colspan="2"><b>Veturiraha yhteensä</b></td><td>' + numFi(vr.km) + '</td><td class="lisat-pay">' + eur(vr.eur) + "</td></tr>" +
+      "</tbody></table>" +
+      vrNotes +
+      '<p class="ot-meta lisat-note">Veturiraha = km × hinta junapainon mukaan (TES Lisäpalkkiot, veturiraha). Yksinajon hinnat ovat taulukossa jo kaksinkertaisia. Veturina ajo maksetaan henkilöjunan hinnalla (vakiintunut käytäntö). Hinta ajopäivän mukaan (1.9.2026 alkaen uudet). Yhteissumma pyöristetään palkkalajeittain koko jaksolta, joten se voi poiketa rivien summasta sentillä.</p>'
+    );
+  }
+  function autoajoHtml(aa) {
+    if (!aa.rows.length && !aa.notes.length) return "";
+    const list = aa.trips
+      .map(
+        (t) =>
+          "<tr><td><b>" + ShiftCalc.AUTOAJO_LABELS[t.tyyppi] + "</b><small>" + dayLabel(t.date) + " · " + numFi(t.km) + " km ajettu" +
+          (t.paidKm !== t.km ? " → väh. " + ShiftCalc.AUTOAJO_MIN_KM + " km" : "") + " · " + rateFi(t.rate) + " €/km</small></td>" +
+          '<td>–</td><td>' + numFi(t.paidKm) + '</td><td class="lisat-pay">' + eur(t.eur) + "</td></tr>"
+      )
+      .join("");
+    return (
+      '<table class="lisat-table aa-list"><thead><tr><th>Autolla-ajo · ajot</th><th>Koodi</th><th>Km</th><th>€</th></tr></thead><tbody>' +
+      list +
+      "</tbody></table>" +
+      '<table class="lisat-table aa-codes"><thead><tr><th>Autolla-ajokorvaus lajeittain</th><th>Koodi</th><th>Km</th><th>€</th></tr></thead><tbody>' +
+      codeRows(aa.rows, (r) => r.label + (r.tyyppi === "ulko" ? " (väh. " + ShiftCalc.AUTOAJO_MIN_KM + " km/ajo)" : ""), (r) => r.tyyppi, ["ajo", "ajoa"]) +
+      '<tr class="lisat-sum"><td colspan="2"><b>Autolla-ajo yhteensä</b></td><td>' + numFi(aa.km) + '</td><td class="lisat-pay">' + eur(aa.eur) + "</td></tr>" +
+      "</tbody></table>" +
+      notesHtml(aa.notes) +
+      '<p class="ot-meta lisat-note">TES Lisäpalkkiot, autolla-ajokorvaus: paikallisajo hitaan yksinajon (1501–4800 t) hinnalla, paikkakunnan ulkopuolinen ajo kaksinajon (enint. 1500 t) hinnalla, vähintään 30 km yhteen suuntaan. Maksetaan vain auton kuljettajalle. Palkkalaji ei tiedossa.</p>'
+    );
+  }
+
   function renderLisat(p, lisat) {
     const L = lisat;
     const C = ShiftCalc.LISA_CODES;
@@ -1011,8 +1285,9 @@
       "</tbody></table>" +
       evs +
       notes +
+      '<div class="vr-block">' + veturirahaHtml(personVeturiraha(p)) + autoajoHtml(personAutoajo(p)) + "</div>" +
       palkkioHtml(p) +
-      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, LM:n ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
+      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, Tunnit yhteensä -luvun ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
   }
 
   function openDetail(personId) {
@@ -1021,6 +1296,8 @@
     $("detailTitle").textContent = p.name + " · " + p.shiftCount + " vuoroa";
     const rests = personRest(p);
     const lisat = personLisat(p);
+    const vr = personVeturiraha(p);
+    const aa = personAutoajo(p);
 
     // Desktop/wide: classic table; mobile: compact day cards (see CSS)
     const tbody = $("detailTable").querySelector("tbody");
@@ -1040,10 +1317,12 @@
           "</button> " +
           extraBits(p, d.date).btn +
           totBits(p, d, lisat).btn +
+          junaBits(p, d, vr, aa).btn +
           " " +
           dateFi(d.date).slice(0, 5) +
           extraBits(p, d.date).body +
           totBits(p, d, lisat).body +
+          junaBits(p, d, vr, aa).body +
           "</td>" +
           "<td>" +
           (WD_SHORT[d.weekday] || "") +
@@ -1067,8 +1346,6 @@
           cell(fmt(d.b25)) +
           cell(fmt(d.b100)) +
           cell(fmt(d.me)) +
-          cell(fmt(d.company)) +
-          cell(fmt(d.check)) +
           "</tr>"
         );
       })
@@ -1087,12 +1364,14 @@
           : "";
         const extra = extraBits(p, d.date);
         const tot = totBits(p, d, lisat);
+        const juna = junaBits(p, d, vr, aa);
         return (
           '<article class="day-card' +
           (hasShift ? "" : " empty") +
           (extra.fig ? " has-extra" : "") +
           (sick ? " sick" : "") +
           (tot.t ? " has-tot" : "") +
+          (juna.n ? " has-juna" : "") +
           '">' +
           '<header><strong>' +
           (WD_SHORT[d.weekday] || "") +
@@ -1109,6 +1388,7 @@
           "</button>" +
           extra.btn +
           tot.btn +
+          juna.btn +
           "</header>" +
           (hasShift
             ? '<div class="day-grid' +
@@ -1126,21 +1406,17 @@
               "<div><span>Yö h</span><b>" +
               fmt(d.night) +
               "</b></div>" +
-              "<div><span>LM</span><b>" +
+              "<div><span>Tunnit yhteensä</span><b>" +
               fmt(d.me) +
               "</b></div>" +
-              "<div><span>Yritys</span><b>" +
-              fmt(d.company) +
-              "</b></div>" +
+
               "<div><span>Lauantai h</span><b>" +
               fmt(d.b25) +
               "</b></div>" +
               "<div><span>Pyhä h</span><b>" +
               fmt(d.b100) +
               "</b></div>" +
-              "<div><span>Erotus</span><b>" +
-              fmt(d.check) +
-              "</b></div>" +
+
               '<div class="' +
               (sick ? "" : restClass(rd.restAfter)) +
               '"><span>Vuorojen väli →</span><b>' +
@@ -1152,6 +1428,7 @@
               : '<p class="muted">Ei vuoroa</p>') +
           extra.body +
           tot.body +
+          juna.body +
           "</article>"
         );
       })
@@ -1174,10 +1451,8 @@
       "</b><span>Pyhä h</span></div>" +
       '<div class="stat"><b>' +
       fmt(activeLm(p)) +
-      "</b><span>LM yht.</span></div>" +
-      '<div class="stat"><b>' +
-      fmt(activeCompany(p)) +
-      "</b><span>Yritys yht.</span></div>" +
+      "</b><span>Tunnit yhteensä</span></div>" +
+
       '<div class="stat"><b>' +
       fmtOt(personOt(p), "lisa") +
       "</b><span>Lisätyö h</span></div>" +
@@ -1348,6 +1623,70 @@
         openTot = null;
         redraw();
       });
+    });
+
+    document.querySelectorAll("#view-detail .juna-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const date = btn.dataset.date;
+        dayFlash = null;
+        if (openJuna && openJuna.id === p.id && openJuna.date === date) openJuna = null;
+        else openJuna = { id: p.id, date: date };
+        redraw();
+      });
+    });
+    document.querySelectorAll("#view-detail .juna-editor").forEach((box) => {
+      box.querySelector(".j-add").addEventListener("click", () => {
+        box.querySelector(".juna-rows").insertAdjacentHTML("beforeend", junaRowHtml(null, pairInfo(p, box.dataset.date)));
+      });
+      box.querySelector(".a-add").addEventListener("click", () => {
+        box.querySelector(".auto-rows").insertAdjacentHTML("beforeend", autoRowHtml(null));
+      });
+      box.addEventListener("change", (e) => {
+        const vt = e.target.closest(".j-veturina");
+        if (vt) vt.closest(".juna-row").classList.toggle("is-veturina", vt.checked);
+        const cb = e.target.closest(".j-ajo");
+        if (!cb) return;
+        const info = pairInfo(p, box.dataset.date);
+        const hint = cb.closest(".juna-row").querySelector(".j-hint");
+        hint.textContent = junaHintText(info, cb.value === "yksin");
+      });
+      box.addEventListener("click", (e) => {
+        const rm = e.target.closest(".j-remove");
+        if (!rm) return;
+        const row = rm.closest(".juna-row");
+        if (row.classList.contains("auto-row") || box.querySelectorAll(".juna-rows .juna-row").length > 1) row.remove();
+        else row.querySelectorAll("input:not([type=checkbox])").forEach((i) => (i.value = ""));
+      });
+      box.querySelector(".j-save").addEventListener("click", () => {
+        const date = box.dataset.date;
+        openJuna = { id: p.id, date: date };
+        const r = readJunaEditor(box);
+        if (r.err) {
+          // keep typed values: show the message without redrawing
+          let el = box.querySelector(".extra-err");
+          if (!el) {
+            el = document.createElement("p");
+            el.className = "extra-err";
+            box.appendChild(el);
+          }
+          el.textContent = r.err;
+          return;
+        }
+        saveJunat(p, date, r.value);
+        saveAutoajot(p, date, r.autos);
+        dayFlash = null;
+        openJuna = null;
+        redraw();
+      });
+      const del = box.querySelector(".j-del");
+      if (del)
+        del.addEventListener("click", () => {
+          saveJunat(p, box.dataset.date, null);
+          saveAutoajot(p, box.dataset.date, null);
+          dayFlash = null;
+          openJuna = null;
+          redraw();
+        });
     });
 
     renderAlerts($("detailAlerts"), state, personId);

@@ -1746,6 +1746,234 @@
     return { flags, perPerson };
   }
 
+  // --- Veturiraha (TES Lisäpalkkiot – Veturiraha, PDF s. 61–62; hinnat lisäpalkkiotaulukko s. 59) ---
+  /**
+   * TES: "Veturirahaa maksetaan kultakin veturikilometriltä." → € = km × hinta.
+   * "Veturikilometrit määräytyvät kultakin matkalta lähtö- ja tulopaikan välisen matkan mukaan."
+   * Hinta valitaan tavarajunien taulukosta junapainon mukaan:
+   *   junapaino 3: 1500 tn tai alle · 4: yli 1500 enint. 4800 tn · 5: yli 4800 enint. 5600 tn tai IVY-VAK-juna
+   *   "hitaat, 40 km/t tai alle" ja "yksinajo" ovat omat rivinsä. Yksinajorivit ovat taulukossa jo
+   *   kaksinkertaisia ("Yhden miehen ajossa on veturiraha kaksinkertainen"), joten niitä ei kerrota uudelleen.
+   * Huomautus 3: junapaino = jarrupainojärjestelmän kokonaisjunapaino; Pekan työpaikalla todellinen paino.
+   * Huomautus 2: itäisen liikenteen VAK-juna (nopeus vähintään 40 km/h) → kuten yli 4800 tn, painosta riippumatta.
+   * Palkkalajit 1450–1462 palkkataulukosta (1456/1463 "Veturina ajo" ei kuulu tähän).
+   * OLETUKSET: (a) yli 5600 tn: TES ei anna riviä → käytetään junapainoa 5 ja näytetään huomautus.
+   *   (b) hinta valitaan junan päivämäärän (vuoron päivän) mukaan.
+   *   (c) € pyöristetään senteiksi palkkalajeittain koko jaksolta (km yhteensä × hinta), kuten palkkalaskelmassa.
+   *   (d) Huomautus 1 (Vartius–Kontiomäki–Oulu–Raahe, suunniteltu paino) ei koske Pekan junia, ei toteutettu.
+   * Veturina ajo (veturi ilman junaa, 1456 / yksin 1463): TES:ssä ei omaa riviä; vakiintuneen käytännön
+   *   (palkkataulukko) mukaan km × henkilöjunan hinta (Henkilöjuna / Henkilöjuna yksinajo). Paino ei vaikuta.
+   */
+  const VETURIRAHA_RATES = [
+    { from: "0000-00-00", r: { 1450: 0.0833, 1451: 0.1677, 1452: 0.2515, 1453: 0.1677, 1454: 0.3357, 1455: 0.504, 1457: 0.1677, 1458: 0.3357, 1459: 0.504, 1460: 0.3357, 1461: 0.6718, 1462: 1.0081, 1456: 0.0576, 1463: 0.1156 } },
+    { from: "2026-09-01", r: { 1450: 0.0857, 1451: 0.1725, 1452: 0.2587, 1453: 0.1725, 1454: 0.3454, 1455: 0.5186, 1457: 0.1725, 1458: 0.3454, 1459: 0.5186, 1460: 0.3454, 1461: 0.6912, 1462: 1.0373, 1456: 0.0592, 1463: 0.1189 } },
+    { from: "2027-08-01", r: { 1450: 0.0877, 1451: 0.1766, 1452: 0.2649, 1453: 0.1766, 1454: 0.3536, 1455: 0.531, 1457: 0.1766, 1458: 0.3536, 1459: 0.531, 1460: 0.3536, 1461: 0.7077, 1462: 1.0621, 1456: 0.0606, 1463: 0.1217 } },
+  ];
+  const VETURIRAHA_LABELS = {
+    1450: "Kaksinajo · tavarajuna enint. 1500 t", 1451: "Kaksinajo · tavarajuna 1501–4800 t", 1452: "Kaksinajo · tavarajuna yli 4800 t tai IVY-VAK",
+    1453: "Kaksinajo · hidas tavarajuna enint. 1500 t", 1454: "Kaksinajo · hidas tavarajuna 1501–4800 t", 1455: "Kaksinajo · hidas tavarajuna yli 4800 t",
+    1456: "Kaksinajo · veturina ajo", 1463: "Yksinajo · veturina ajo",
+    1457: "Yksinajo · tavarajuna enint. 1500 t", 1458: "Yksinajo · tavarajuna 1501–4800 t", 1459: "Yksinajo · tavarajuna yli 4800 t tai IVY-VAK",
+    1460: "Yksinajo · hidas tavarajuna enint. 1500 t", 1461: "Yksinajo · hidas tavarajuna 1501–4800 t", 1462: "Yksinajo · hidas tavarajuna yli 4800 t",
+  };
+  /** Row title for one counted train: always starts with Yksinajo / Kaksinajo. */
+  function veturirahaTitle(t) {
+    const who = t.yksin ? "Yksinajo" : "Kaksinajo";
+    if (t.veturina) return who + " · veturina ajo";
+    const lk = junapainoLuokka(t);
+    if (t.ivyvak && !t.hidas) return who + " · tavarajuna, IVY-VAK (kuten yli 4800 t)";
+    const w = lk === 3 ? "enint. 1500 t" : lk === 4 ? "1501–4800 t" : "yli 4800 t";
+    return who + " · " + (t.hidas ? "hidas tavarajuna (enint. 40 km/h) " : "tavarajuna ") + w;
+  }
+
+  function veturirahaRatesFor(key) {
+    let r = VETURIRAHA_RATES[0];
+    VETURIRAHA_RATES.forEach(function (x) {
+      if (key >= x.from) r = x;
+    });
+    return r.r;
+  }
+
+  /** Normalise one stored train → { junanumero, paino, km, yksin, hidas, ivyvak } or null. */
+  function normJuna(j) {
+    if (!j || typeof j !== "object") return null;
+    const num = function (v) {
+      const n = typeof v === "number" ? v : parseFloat(String(v == null ? "" : v).replace(/\s/g, "").replace(",", "."));
+      return isFinite(n) && n > 0 ? n : null;
+    };
+    return {
+      junanumero: String(j.junanumero == null ? "" : j.junanumero).trim(),
+      paino: num(j.paino),
+      km: num(j.km),
+      // true/false = saved manual choice; null = not chosen → auto-detected from the sheet (see pairPartners)
+      yksin: j.yksin === true ? true : j.yksin === false ? false : null,
+      hidas: !!j.hidas,
+      ivyvak: !!j.ivyvak,
+      veturina: !!j.veturina,
+    };
+  }
+
+  /**
+   * Autolla-ajokorvaus (TES Lisäpalkkiot, PDF s. 63): veturimies ajaa työnantajan autoa miehistönvaihto-
+   * tai miehitystarkoituksessa; maksetaan vain autoa kuljettavalle. € = todelliset km × hinta:
+   *   1) Paikallisajo (paikkakunnan sisällä): "samansuuruisena kuin … hitaissa yksinajettavissa junapainoltaan
+   *      yli 1500 tonnin mutta alle 4800 tonnin tavarajunissa" → koodin 1461 hinta.
+   *   2) Paikkakunnan ulkopuolinen ajo: "kuin … kaksinajettavissa junapainoltaan alle 1500 tonnin tavarajunissa,
+   *      kuitenkin vähintään 30 kilometriltä/yhdensuuntainen ajomatka" → koodin 1450 hinta, jokainen
+   *      yhdensuuntainen ajo erikseen vähintään 30 km.
+   * Palkkalaji ei tiedossa (palkkataulukossa ei riviä) → näytetään "–".
+   * trips: { [date]: [{ tyyppi: "paikallis" | "ulko", km, kuvaus? }] }
+   */
+  const AUTOAJO_LABELS = { paikallis: "Paikallisajo", ulko: "Paikkakunnan ulkopuolinen ajo" };
+  const AUTOAJO_MIN_KM = 30;
+  function normAutoajo(t) {
+    if (!t || typeof t !== "object") return null;
+    const km = typeof t.km === "number" ? t.km : parseFloat(String(t.km == null ? "" : t.km).replace(/\s/g, "").replace(",", "."));
+    return { tyyppi: t.tyyppi === "ulko" ? "ulko" : "paikallis", km: isFinite(km) && km > 0 ? km : null, kuvaus: String(t.kuvaus || "").trim() };
+  }
+  function autoajoSummary(trips, skip) {
+    const out = [];
+    const groups = {};
+    const notes = [];
+    Object.keys(trips || {})
+      .sort()
+      .forEach(function (date) {
+        (Array.isArray(trips[date]) ? trips[date] : []).forEach(function (raw, i) {
+          const t = normAutoajo(raw);
+          if (!t || t.km == null) return;
+          if (skip && skip(date)) {
+            notes.push({ date: date, msg: "Autolla-ajo " + (i + 1) + ": keskeytyspäivä, ei lasketa." });
+            return;
+          }
+          const rates = veturirahaRatesFor(date);
+          const rate = t.tyyppi === "ulko" ? rates[1450] : rates[1461];
+          const paid = t.tyyppi === "ulko" ? Math.max(AUTOAJO_MIN_KM, t.km) : t.km;
+          const row = Object.assign({ date: date, i: i, rate: rate, paidKm: paid, eur: round2(paid * rate) }, t);
+          out.push(row);
+          const gk = t.tyyppi + "@" + rate;
+          if (!groups[gk]) groups[gk] = { tyyppi: t.tyyppi, label: AUTOAJO_LABELS[t.tyyppi], rate: rate, km: 0, n: 0, from: date };
+          groups[gk].km += paid;
+          groups[gk].n += 1;
+        });
+      });
+    const rows = Object.keys(groups)
+      .map(function (k) {
+        const g = groups[k];
+        g.km = Math.round(g.km * 1000) / 1000;
+        g.eur = round2(g.km * g.rate);
+        return g;
+      })
+      .sort(function (a, b) {
+        return a.tyyppi < b.tyyppi ? -1 : a.tyyppi > b.tyyppi ? 1 : a.from < b.from ? -1 : 1;
+      });
+    const eur = round2(rows.reduce(function (s, r) { return s + r.eur; }, 0));
+    const km = Math.round(rows.reduce(function (s, r) { return s + r.km; }, 0) * 1000) / 1000;
+    return { trips: out, rows: rows, km: km, eur: eur, notes: notes };
+  }
+
+  /**
+   * Yksin- vai kaksinajo vuorotaulusta (Pekan työpaikan käytäntö, ei TES-sääntö): jos jollakin muulla
+   * lomakkeen henkilöllä on samana päivänä täsmälleen sama suunniteltu vuoro (sama alku- ja loppuaika
+   * minuutilleen), juna on ajettu kahdestaan; muuten yksin. Käytetään suunniteltua vuoroa (d.start/d.end),
+   * ei toteumaa eikä keskeytyspäiviä. Nimettömät sarakkeet eivät ole henkilöitä (parseJaksoForm), joten
+   * niitä ei verrata.
+   * → { yksin: bool, partners: [name], planned: bool }
+   */
+  function pairPartners(people, person, date) {
+    const own = (person.days || []).find(function (d) { return d.date === date; });
+    if (!own || own.start == null || own.end == null) return { yksin: true, partners: [], planned: false };
+    const partners = [];
+    (people || []).forEach(function (q) {
+      if (q === person || q.id === person.id) return;
+      const d = (q.days || []).find(function (x) { return x.date === date; });
+      if (d && d.start === own.start && d.end === own.end) partners.push(q.name);
+    });
+    return { yksin: partners.length === 0, partners: partners, planned: true };
+  }
+
+  /** Junapaino class 3/4/5 (TES rows 3.–5.) */
+  function junapainoLuokka(j) {
+    if (j.ivyvak && !j.hidas) return 5; // Huomautus 2 / "tai IVY-VAK-juna"
+    if (j.paino == null) return null;
+    if (j.paino <= 1500) return 3;
+    if (j.paino <= 4800) return 4;
+    return 5;
+  }
+
+  /** Pay code for one train (1450–1462), or null if weight is missing. */
+  function veturirahaCode(j) {
+    const yksin = j.yksin == null ? true : j.yksin;
+    if (j.veturina) return yksin ? 1463 : 1456;
+    const lk = junapainoLuokka(j);
+    if (lk == null) return null;
+    const base = yksin ? (j.hidas ? 1460 : 1457) : j.hidas ? 1453 : 1450;
+    return base + (lk - 3);
+  }
+
+  function round2(x) {
+    return Math.round(x * 100 + 1e-9) / 100;
+  }
+
+  /**
+   * junat: { [yyyy-mm-dd]: [train, ...] }; skip(date) → true for days not counted (keskeytyspäivä);
+   * autoYksin(date) → true/false for trains without a saved choice (default yksinajo).
+   * → { trains:[{date,i,...train,code,rate,eur}], rows:[{code,label,rate,km,eur,from}], km, eur, notes }
+   */
+  function veturirahaSummary(junat, skip, autoYksin) {
+    const trains = [];
+    const groups = {};
+    const notes = [];
+    Object.keys(junat || {})
+      .sort()
+      .forEach(function (date) {
+        const list = Array.isArray(junat[date]) ? junat[date] : [];
+        list.forEach(function (raw, i) {
+          const j = normJuna(raw);
+          if (!j) return;
+          j.auto = j.yksin == null;
+          if (j.auto) {
+            const a = autoYksin ? autoYksin(date) : null;
+            j.yksin = a == null ? true : !!a;
+          }
+          const nm = (j.veturina ? "Veturina ajo " : "Juna ") + (j.junanumero || i + 1);
+          if (skip && skip(date)) {
+            notes.push({ date: date, msg: nm + ": keskeytyspäivä, ei lasketa." });
+            return;
+          }
+          const code = veturirahaCode(j);
+          if (code == null || j.km == null) {
+            notes.push({ date: date, msg: nm + ": puuttuu " + (code == null ? "paino" : "km") + ", ei lasketa." });
+            return;
+          }
+          if (!j.veturina && j.paino != null && j.paino > 5600 && !(j.ivyvak && !j.hidas))
+            notes.push({ date: date, msg: nm + ": paino yli 5600 t. TES:n taulukko päättyy 5600 t:iin, laskettu junapainolla 5 (tarkista palkanlaskennasta)." });
+          if (!j.veturina && j.ivyvak && j.hidas)
+            notes.push({ date: date, msg: nm + ": IVY-VAK-sääntö koskee vain junia, joiden nopeus on vähintään 40 km/h. Laskettu hitaana painon mukaan." });
+          const rate = veturirahaRatesFor(date)[code];
+          const t = Object.assign({ date: date, i: i, code: code, rate: rate, eur: round2(j.km * rate) }, j);
+          trains.push(t);
+          const gk = code + "@" + rate;
+          if (!groups[gk]) groups[gk] = { code: code, label: VETURIRAHA_LABELS[code], rate: rate, km: 0, n: 0, from: date };
+          groups[gk].km += j.km;
+          groups[gk].n += 1;
+        });
+      });
+    const rows = Object.keys(groups)
+      .map(function (k) {
+        const g = groups[k];
+        g.km = Math.round(g.km * 1000) / 1000;
+        g.eur = round2(g.km * g.rate);
+        return g;
+      })
+      .sort(function (a, b) {
+        return a.code - b.code || (a.from < b.from ? -1 : 1);
+      });
+    const eur = round2(rows.reduce(function (s, r) { return s + r.eur; }, 0));
+    const km = Math.round(rows.reduce(function (s, r) { return s + r.km; }, 0) * 1000) / 1000;
+    return { trains: trains, rows: rows, km: km, eur: eur, notes: notes };
+  }
+
+
   return {
     WEEKDAYS_FI,
     parseShift,
@@ -1799,5 +2027,18 @@
     lisatSummary,
     countedShift,
     extraOverlaps,
+    VETURIRAHA_RATES,
+    VETURIRAHA_LABELS,
+    veturirahaRatesFor,
+    normJuna,
+    junapainoLuokka,
+    veturirahaCode,
+    veturirahaSummary,
+    veturirahaTitle,
+    pairPartners,
+    AUTOAJO_LABELS,
+    AUTOAJO_MIN_KM,
+    normAutoajo,
+    autoajoSummary,
   };
 });

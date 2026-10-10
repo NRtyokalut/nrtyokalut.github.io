@@ -415,3 +415,37 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .palkkio-warn { margin: 6px 0; padding: 8px; border-radius: 10px; background: var(--md); color: var(--md-ink); font-size: 0.8rem; line-height: 1.4; }
 .tot-help { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; line-height: 1.4; color: #6b4700; background: #fffaf0; border: 1px solid #ecd3a0; border-radius: 8px; padding: 6px 8px; }
 .tot-help[hidden] { display: none; }
+/* Junat (veturiraha) */
+.juna-toggle { border: 1px solid #a9cfa9; background: #f3faf3; color: #1f5a1f; border-radius: 999px; font-weight: 700; font-size: 0.72rem; padding: 3px 8px; cursor: pointer; margin-left: 4px; }
+.juna-toggle.on { background: #e3f1e3; border-color: #8fc28f; }
+.juna-line { background: #eef7ee; border: 1px solid #b9dcb9; border-radius: 10px; padding: 8px; margin-top: 8px; font-size: 0.85rem; line-height: 1.45; overflow-wrap: anywhere; }
+.tag.juna { background: #cfe8cf; color: #1f5a1f; }
+.juna-editor { margin-top: 8px; display: grid; gap: 8px; }
+.juna-editor[hidden] { display: none; }
+.juna-rows { display: grid; gap: 8px; }
+.juna-row { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; border: 1px solid #b9dcb9; border-radius: 10px; padding: 8px 8px 6px; background: #f7fbf7; }
+.juna-row > label { display: flex; flex-direction: column; gap: 2px; font-size: 0.72rem; color: var(--muted); font-weight: 700; }
+.juna-row input:not([type=checkbox]) { font-size: 1rem; padding: 6px 6px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%; min-width: 0; }
+.juna-flags { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 0.82rem; font-weight: 700; }
+.juna-flags label { display: flex; align-items: center; gap: 4px; }
+.juna-row .j-remove { position: absolute; top: -9px; right: -7px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 0.75rem; line-height: 1; cursor: pointer; }
+.juna-editor .j-add { justify-self: start; font: inherit; font-size: 0.85rem; font-weight: 700; padding: 6px 10px; border-radius: 8px; border: 1px dashed #8fc28f; background: #fff; color: #1f5a1f; cursor: pointer; }
+.juna-editor .extra-err { margin: 0; }
+.juna-row .j-hint { grid-column: 1 / -1; font-size: 0.74rem; color: var(--muted); margin-top: -2px; }
+.juna-pair { margin: 0; font-size: 0.8rem; font-weight: 700; color: #1f5a1f; }
+.juna-pair.kaksin { color: #0B3D5C; }
+.juna-row.is-veturina .j-paino-l, .juna-row.is-veturina .j-train-only { display: none; }
+.auto-rows { display: grid; gap: 8px; }
+.auto-row { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
+.auto-row > label select { font-size: 0.9rem; padding: 6px 4px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%; min-width: 0; }
+.auto-head { margin: 4px 0 0; font-size: 0.85rem; color: #1f5a1f; }
+.auto-head small { font-weight: 400; color: var(--muted); }
+.juna-editor .a-add { justify-self: start; font: inherit; font-size: 0.85rem; font-weight: 700; padding: 6px 10px; border-radius: 8px; border: 1px dashed #8fc28f; background: #fff; color: #1f5a1f; cursor: pointer; }
+.ajo-toggle { display: inline-flex; border: 1px solid #8fc28f; border-radius: 999px; overflow: hidden; }
+.ajo-toggle label { display: block; margin: 0; }
+.ajo-toggle input { position: absolute; opacity: 0; pointer-events: none; }
+.ajo-toggle span { display: block; padding: 5px 12px; font-size: 0.82rem; font-weight: 700; color: #1f5a1f; background: #fff; cursor: pointer; }
+.ajo-toggle label + label span { border-left: 1px solid #8fc28f; }
+.ajo-toggle input:checked + span { background: #1f5a1f; color: #fff; }
+.ajo-toggle input:focus-visible + span { outline: 2px solid #0B3D5C; outline-offset: -2px; }
+.juna-flags { align-items: center; }
