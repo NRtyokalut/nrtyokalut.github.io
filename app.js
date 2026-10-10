@@ -912,6 +912,7 @@
     const rows = items.map((x) => [x[0], x[1], eur(x[2])]);
     rows.push({ cls: pdf ? "pv-sum" : "lisat-sum", cells: ["<b>Yhteensä / kk</b>" + (w ? "" : " <small>(kuukausipalkka puuttuu)</small>"), "", eur(sum)] });
     rows.push({ cls: pdf ? "pv-sum" : "lisat-sum", cells: ["<b>Jakson lisät yhteensä</b> <small>(tuntilisät arvio + korvaukset + päivystysrahat + erityistehtävä + päivärahat + veturiraha + autolla-ajo)</small>", "", eur(lisatTotal)] });
+    rows.push({ cls: pdf ? "pv-sum pv-grand" : "lisat-sum lisat-grand", cells: ["<b>Yhteensä (kuukausi + lisät), brutto</b>", "", "<b>" + eur(Math.round((sum + lisatTotal) * 100) / 100) + "</b>"] });
     if (pdf) return pvTable(head, rows);
     return (
       '<table class="lisat-table kiintea-table"><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
