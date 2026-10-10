@@ -1,4 +1,4 @@
-const CACHE = "nrtyokalut-v47";
+const CACHE = "nrtyokalut-v48";
 const ASSETS = [
   "./",
   "./index.html",
@@ -47,4 +47,4 @@ self.addEventListener("fetch", (e) => {
   );
 });
 
-/*! © 2026 Lämpöpumppu Mafia (Y-tunnus 3336940-2). Kaikki oikeudet pidätetään. All rights reserved. */
+/*! © 2026 Lämpöpumppu Mafia. Kaikki oikeudet pidätetään. All rights reserved. */
