@@ -506,3 +506,6 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .palkka-row .j-remove { position: absolute; top: 4px; right: 4px; width: 24px; height: 24px; border-radius: 50%; border: 1px solid var(--line); background: #fff; font-size: 0.75rem; cursor: pointer; }
 .palkka-derived { grid-column: 1 / -1; margin: 0; font-size: 0.82rem; color: #1d6b34; font-weight: 600; }
 .palkka-fixed { font-size: 0.82rem; margin: 4px 0; }
+
+.palkka-row [hidden] { display: none !important; }
+.palkka-row select { font: inherit; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; max-width: 100%; }

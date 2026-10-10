@@ -1680,9 +1680,63 @@
   function tuntipalkka(kk) {
     return Math.round((kk / 163) * 100) / 100;
   }
-  /** Wage periods [{ from, kk, td }] sorted; returns the row valid on date (before the first row: the first row). */
+  /**
+   * Veturimiesten palkkataulukko (TES palkkaliite, PDF s. 58/59): kuukausipalkka palkkaryhmän ja
+   * työkokemusportaan mukaan, voimassa 1.5.2025, 1.9.2026 ja 1.8.2027 alkaen.
+   */
+  const PALKKA_FROM = ["2025-05-01", "2026-09-01", "2027-08-01"];
+  const PALKKA_GROUPS = {
+    PR1: "PR 1 Veturinkuljettaja harjoittelija",
+    PR2: "PR 2 Veturinkuljettaja junankuljetustehtävässä kaksinajossa",
+    PR3: "PR 3 Veturinkuljettaja yksinajossa, ratapihapäivystys, huolto, tallipäivystys, muut veturimiestehtävät",
+  };
+  const PALKKA_TABLE = [
+    { id: "PR1", group: "PR1", label: "PR 1, harjoittelija", eur: [2134.59, 2196.49, 2249.21] },
+    { id: "PR2-0", group: "PR2", label: "PR 2, alle 3 v", eur: [2730.64, 2809.83, 2877.27] },
+    { id: "PR2-3", group: "PR2", label: "PR 2, 3 v", eur: [2900.71, 2984.83, 3056.47] },
+    { id: "PR2-6", group: "PR2", label: "PR 2, 6 v", eur: [3033.01, 3120.97, 3195.87] },
+    { id: "PR2-11", group: "PR2", label: "PR 2, 11 v", eur: [3228.09, 3321.7, 3401.42] },
+    { id: "PR2-18", group: "PR2", label: "PR 2, 18 v 6 kk", eur: [3417.62, 3516.73, 3601.13] },
+    { id: "PR3-0", group: "PR3", label: "PR 3, alle 3 v", eur: [2730.64, 2809.83, 2877.27] },
+    { id: "PR3-3", group: "PR3", label: "PR 3, 3 v", eur: [3033.01, 3120.97, 3195.87] },
+    { id: "PR3-6", group: "PR3", label: "PR 3, 6 v", eur: [3228.09, 3321.7, 3401.42] },
+    { id: "PR3-11", group: "PR3", label: "PR 3, 11 v", eur: [3408.62, 3507.47, 3591.65] },
+    { id: "PR3-18", group: "PR3", label: "PR 3, 18 v 6 kk", eur: [3598.17, 3702.52, 3791.38] },
+  ];
+  /** Table €/kk for a row id on a date (before 1.5.2025: the 1.5.2025 table). */
+  function palkkaTableKk(id, key) {
+    const r = PALKKA_TABLE.find(function (x) { return x.id === id; });
+    if (!r) return null;
+    let i = 0;
+    PALKKA_FROM.forEach(function (f, j) {
+      if (key >= f) i = j;
+    });
+    return r.eur[i];
+  }
+  /** Table row id whose €/kk on the date equals kk (PR 3 preferred when PR 2/PR 3 share a value), or null. */
+  function palkkaTableMatch(kk, key) {
+    if (!(kk > 0)) return null;
+    for (let i = PALKKA_TABLE.length - 1; i >= 0; i--) {
+      if (Math.abs(palkkaTableKk(PALKKA_TABLE[i].id, key) - kk) < 0.005) return PALKKA_TABLE[i].id;
+    }
+    return null;
+  }
+  /**
+   * Wage periods [{ from, kk, td, pr? }] sorted; returns the row valid on date (before the first row: the first row).
+   * A row with pr (palkkataulukon rivi) takes its €/kk from the table valid on that date (not before the row's start).
+   */
   function wageRowFor(list, key) {
-    const rows = (list || []).filter(function (r) { return r && r.kk > 0; }).sort(function (a, b) { return (a.from || "") < (b.from || "") ? -1 : 1; });
+    const rows = (list || [])
+      .map(function (r) {
+        if (!r) return r;
+        // saved typed €/kk equal to a table row (on the row's date) is treated as that table row
+        const pr = r.pr || palkkaTableMatch(r.kk, r.from || key);
+        // priced on the day, but never before the row's own start (before the first row: the first row)
+        const at = r.from && key < r.from ? r.from : key;
+        if (pr && palkkaTableKk(pr, at) != null) return Object.assign({}, r, { pr: pr, kk: palkkaTableKk(pr, at) });
+        return r;
+      })
+      .filter(function (r) { return r && r.kk > 0; }).sort(function (a, b) { return (a.from || "") < (b.from || "") ? -1 : 1; });
     if (!rows.length) return null;
     let r = rows[0];
     rows.forEach(function (x) {
@@ -2421,6 +2475,11 @@
     lisaEuro,
     lisaRatesForDay,
     wageRowFor,
+    PALKKA_FROM,
+    PALKKA_GROUPS,
+    PALKKA_TABLE,
+    palkkaTableKk,
+    palkkaTableMatch,
     tuntipalkka,
     NR_LISA,
     PALKKA_STORAGE_KEY,

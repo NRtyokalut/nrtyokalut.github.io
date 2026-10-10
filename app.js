@@ -803,15 +803,22 @@
     const v = loadPalkka();
     const rows = v.rows.length ? v.rows : [{ from: "", kk: null, td: ShiftCalc.TAYDENNYS_DEFAULT }];
     const nr = ShiftCalc.NR_LISA;
-    const rowHtml = (r) =>
-      '<div class="palkka-row">' +
+    const rowHtml = (r) => {
+      const at = r.from || todayKey();
+      const pr = r.pr || ShiftCalc.palkkaTableMatch(r.kk, at);
+      const kk = pr ? ShiftCalc.palkkaTableKk(pr, at) : r.kk;
+      const manual = !pr && r.kk > 0;
+      r = Object.assign({}, r, { kk: kk });
+      return '<div class="palkka-row">' +
       '<label>Voimassa alkaen <input type="date" class="pk-from" value="' + (r.from || "") + '"></label>' +
-      '<label>Kuukausipalkka (€/kk) <input class="pk-kk" inputmode="decimal" value="' + numIn(r.kk) + '" placeholder="esim. 3702,52"></label>' +
+      '<label>Kuukausipalkka (TES-taulukko) <select class="pk-pr">' + prOptions(pr || (manual ? "muu" : ""), at) + "</select></label>" +
+      '<label class="pk-kk-l"' + (manual ? "" : " hidden") + '>Kuukausipalkka (€/kk) <input class="pk-kk" inputmode="decimal" value="' + (manual ? numIn(r.kk) : "") + '" placeholder="esim. 3702,52"></label>' +
       '<label>Täydennysosa (€/h) <span class="arvio">arvio</span> <input class="pk-td" inputmode="decimal" value="' + numIn(r.td != null ? r.td : ShiftCalc.TAYDENNYS_DEFAULT) + '"></label>' +
       (r.kk > 0
         ? '<p class="palkka-derived">Tuntipalkka ' + eur(ShiftCalc.tuntipalkka(r.kk)) + " (kk / 163) · lisien perusta " + eur(Math.round((ShiftCalc.tuntipalkka(r.kk) + (r.td != null ? r.td : ShiftCalc.TAYDENNYS_DEFAULT)) * 100) / 100) + "/h</p>"
         : "") +
       '<button type="button" class="j-remove pk-del" aria-label="Poista rivi">✕</button></div>';
+    };
     box.innerHTML =
       "<summary>Palkka-asetukset" + (hasWage() ? "" : ' <span class="arvio">ei asetettu</span>') + "</summary>" +
       '<div class="palkka-rows">' + rows.map(rowHtml).join("") + "</div>" +
@@ -819,6 +826,28 @@
       '<div class="ot-actions"><button type="button" class="ot-save" id="pkSave">Tallenna</button><button type="button" class="ot-reset" id="pkAdd">+ Palkkajakso</button></div>' +
       '<p class="tot-help">Lisää uusi rivi, kun palkka muuttuu (esim. 1.9.2026, 1.8.2027). Ennen ensimmäistä riviä käytetään ensimmäistä riviä. Ilman palkkaa käytetään palkkalaskelmasta arvioituja hintoja.</p>' +
       '<p class="extra-err" id="pkErr" hidden></p>';
+  }
+  function todayKey() {
+    const d = new Date();
+    return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+  }
+  /** Select options: TES table rows priced on the given date, grouped by palkkaryhmä, + Muu. */
+  function prOptions(cur, at) {
+    const o = (v, label) => '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + label + "</option>";
+    return (
+      o("", "Valitse…") +
+      Object.keys(ShiftCalc.PALKKA_GROUPS)
+        .map((g) => '<optgroup label="' + escHtml(ShiftCalc.PALKKA_GROUPS[g]) + '">' + ShiftCalc.PALKKA_TABLE.filter((x) => x.group === g).map((x) => o(x.id, x.label + " – " + eur(ShiftCalc.palkkaTableKk(x.id, at)))).join("") + "</optgroup>")
+        .join("") +
+      o("muu", "Muu (syötä itse)")
+    );
+  }
+  function syncPalkkaRow(row) {
+    const sel = row.querySelector(".pk-pr");
+    const at = row.querySelector(".pk-from").value || todayKey();
+    const cur = sel.value;
+    sel.innerHTML = prOptions(cur, at);
+    row.querySelector(".pk-kk-l").hidden = cur !== "muu";
   }
   function readPalkka() {
     const out = [];
@@ -829,11 +858,19 @@
       return isFinite(n) && n >= 0 ? n : NaN;
     };
     for (const row of $("palkkaBox").querySelectorAll(".palkka-row")) {
-      const kk = num(row.querySelector(".pk-kk").value);
+      const pr = row.querySelector(".pk-pr").value;
+      const from = row.querySelector(".pk-from").value || "";
       const td = num(row.querySelector(".pk-td").value);
-      if (kk == null) continue;
-      if (Number.isNaN(kk) || Number.isNaN(td) || kk <= 0) return { err: "Anna kuukausipalkka ja täydennysosa numeroina." };
-      out.push({ from: row.querySelector(".pk-from").value || "", kk: kk, td: td == null ? ShiftCalc.TAYDENNYS_DEFAULT : td });
+      if (pr === "") continue;
+      if (Number.isNaN(td)) return { err: "Anna täydennysosa numerona." };
+      const tdv = td == null ? ShiftCalc.TAYDENNYS_DEFAULT : td;
+      if (pr !== "muu") {
+        out.push({ from: from, pr: pr, kk: ShiftCalc.palkkaTableKk(pr, from || todayKey()), td: tdv });
+        continue;
+      }
+      const kk = num(row.querySelector(".pk-kk").value);
+      if (kk == null || Number.isNaN(kk) || kk <= 0) return { err: "Anna kuukausipalkka numerona." };
+      out.push({ from: from, kk: kk, td: tdv });
     }
     return { rows: out.sort((a, b) => (a.from < b.from ? -1 : 1)) };
   }
@@ -1885,10 +1922,14 @@
       renderLisat(p, personLisat(p));
     };
     renderPalkka();
+    $("palkkaBox").onchange = (e) => {
+      const row = e.target.closest && e.target.closest(".palkka-row");
+      if (row && (e.target.classList.contains("pk-pr") || e.target.classList.contains("pk-from"))) syncPalkkaRow(row);
+    };
     $("palkkaBox").onclick = (e) => {
       if (e.target.id === "pkAdd") {
         $("palkkaBox").querySelector(".palkka-rows").insertAdjacentHTML("beforeend",
-          '<div class="palkka-row"><label>Voimassa alkaen <input type="date" class="pk-from"></label><label>Kuukausipalkka (€/kk) <input class="pk-kk" inputmode="decimal"></label><label>Täydennysosa (€/h) <span class="arvio">arvio</span> <input class="pk-td" inputmode="decimal" value="' + numIn(ShiftCalc.TAYDENNYS_DEFAULT) + '"></label><button type="button" class="j-remove pk-del" aria-label="Poista rivi">✕</button></div>');
+          `<div class="palkka-row"><label>Voimassa alkaen <input type="date" class="pk-from"></label><label>Kuukausipalkka (TES-taulukko) <select class="pk-pr">${prOptions("", todayKey())}</select></label><label class="pk-kk-l" hidden>Kuukausipalkka (€/kk) <input class="pk-kk" inputmode="decimal"></label>` + '<label>Täydennysosa (€/h) <span class="arvio">arvio</span> <input class="pk-td" inputmode="decimal" value="' + numIn(ShiftCalc.TAYDENNYS_DEFAULT) + '"></label><button type="button" class="j-remove pk-del" aria-label="Poista rivi">✕</button></div>');
       } else if (e.target.classList.contains("pk-del")) {
         e.target.closest(".palkka-row").remove();
       } else if (e.target.id === "pkSave") {
