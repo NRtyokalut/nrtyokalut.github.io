@@ -1064,6 +1064,43 @@
     const m = ShiftCalc.parseClock(el.value);
     if (m != null) el.value = fmt(m);
   });
+  /**
+   * Day card tiles. With a Poikkeama the big value is what is counted (same rules as the totals:
+   * sumActive for hours, the worked times for alku/loppu); a changed value shows the planned one small.
+   */
+  function dayTiles(p, d, sick, t) {
+    const tile = (label, big, plan, note) =>
+      "<div><span>" + label + "</span><b>" + big + "</b>" +
+      (plan != null && plan !== big ? '<small class="tile-plan">suunniteltu ' + plan + "</small>" : "") +
+      (note ? '<small class="tile-plan">' + note + "</small>" : "") +
+      "</div>";
+    const P = (x) => (d.start != null && x != null ? fmt(x) : null);
+    if (!t || sick) {
+      return tile("Alku", fmt(d.start)) + tile("Loppu", fmt(d.end)) + tile("Kovat tunnit", fmt(d.hrs)) + tile("Yö h", fmt(d.night)) +
+        tile("Tunnit yhteensä", fmt(d.me)) + tile("Lauantai h", fmt(d.b25)) + tile("Pyhä h", fmt(d.b100));
+    }
+    const tots = personTots(p);
+    const one = [d];
+    const marks = personMarks(p);
+    const c = (k) => fmt(ShiftCalc.sumActive(one, marks, k, null, state.holidayMap, tots));
+    const ws = ShiftCalc.workedShifts(d, tots, null)[0];
+    const peruttu = t.type === "peruttu";
+    const timeNote = peruttu ? "peruttu" : t.type === "vaihto" ? "ajettu vuoro" : "";
+    const hrsNote =
+      t.type === "vaihto" ? "oman vuoron mukaan"
+      : t.type === "korvattu" ? "suurempi (suunniteltu / uusi)"
+      : peruttu ? (t.late && t.korvaus ? "peruutuskorvaus valittu" : "peruttu, tunnit lasketaan")
+      : "";
+    return (
+      tile("Alku", ws ? fmt(ws.start) : "—", P(d.start), timeNote) +
+      tile("Loppu", ws ? fmt(ws.end) : "—", P(d.end)) +
+      tile("Kovat tunnit", c("hrs"), P(d.hrs)) +
+      tile("Yö h", c("night"), P(d.night)) +
+      tile("Tunnit yhteensä", c("me"), P(d.me), hrsNote) +
+      tile("Lauantai h", c("b25"), P(d.b25)) +
+      tile("Pyhä h", c("b100"), P(d.b100))
+    );
+  }
   function readTotEditor(box, d) {
     const v = box.querySelector(".tot-type").value;
     const get = (cls) => {
@@ -1876,33 +1913,11 @@
           tot.btn +
           juna.btn +
           "</header>" +
-          (hasShift
+          (hasShift || (tot.t && tot.t.type === "kutsu")
             ? '<div class="day-grid' +
               (sick ? " struck" : "") +
               '">' +
-              "<div><span>Alku</span><b>" +
-              fmt(d.start) +
-              "</b></div>" +
-              "<div><span>Loppu</span><b>" +
-              fmt(d.end) +
-              "</b></div>" +
-              "<div><span>Kovat tunnit</span><b>" +
-              fmt(d.hrs) +
-              "</b></div>" +
-              "<div><span>Yö h</span><b>" +
-              fmt(d.night) +
-              "</b></div>" +
-              "<div><span>Tunnit yhteensä</span><b>" +
-              fmt(d.me) +
-              "</b></div>" +
-
-              "<div><span>Lauantai h</span><b>" +
-              fmt(d.b25) +
-              "</b></div>" +
-              "<div><span>Pyhä h</span><b>" +
-              fmt(d.b100) +
-              "</b></div>" +
-
+              dayTiles(p, d, sick, tot.t) +
               '<div class="' +
               (sick ? "" : restClass(rd.restAfter)) +
               '"><span>Vuorojen väli →</span><b>' +
