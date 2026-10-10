@@ -1446,8 +1446,8 @@
   function erpvRows(E) {
     const rows = [];
     const multi = (list) => list.length > 1;
-    const etList = E.et.rows.length ? E.et.rows : [{ rate: ShiftCalc.eritRateFor(state.startDate), min: 0, eur: 0, from: state.startDate }];
-    etList.forEach((g) => rows.push(["Erityistehtävälisä", rateFi(g.rate) + " €/h" + (multi(etList) ? " · " + dateFi(g.from).slice(0, 6) + " alk." : ""), ShiftCalc.ERIT_CODE, fmt(g.min), eur(g.eur)]));
+    const etList = E.et.rows.length ? E.et.rows : [{ rate: ShiftCalc.eritRateFor(state.startDate), min: 0, hours: 0, eur: 0, from: state.startDate }];
+    etList.forEach((g) => rows.push(["Erityistehtävälisä", rateFi(g.rate) + " €/h" + (multi(etList) ? " · " + dateFi(g.from).slice(0, 6) + " alk." : ""), ShiftCalc.ERIT_CODE, fmt(g.min) + " → " + numFi(Math.round(g.hours * 100) / 100) + " h", eur(g.eur)]));
     ["koko", "osa"].forEach((k) => {
       const b = E.pv[k];
       const list = b.rows.length ? b.rows : [{ rate: ShiftCalc.paivarahaRatesFor(state.startDate)[k], n: 0, eur: 0, from: state.startDate }];
@@ -1462,7 +1462,7 @@
       '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(E.eur) + "</td></tr>" +
       "</tbody></table>" +
       notesHtml(E.notes) +
-      '<p class="ot-meta lisat-note">Päiväraha lasketaan automaattisesti tehdyn vuoron alusta loppuun (poikkeamat huomioiden): kokopäiväraha vähintään 12 h, osapäiväraha yli 8 h tai yli 6 h, jos yli 3 h osuu klo 16–07 (TES Lisälehti 4, 9 §). Yksi päiväraha päivässä. Eurot Verohallinnon mukaan (2026: 54 € / 25 €). Erityistehtävä ja päivärahan käsinvalinta päivän <b>+ Lisät</b>-napista.</p>'
+      '<p class="ot-meta lisat-note">Päiväraha lasketaan automaattisesti tehdyn vuoron alusta loppuun (poikkeamat huomioiden): kokopäiväraha vähintään 12 h, osapäiväraha yli 8 h tai yli 6 h, jos yli 3 h osuu klo 16–07 (TES Lisälehti 4, 9 §). Yksi päiväraha päivässä. Erityistehtävän tunnit lasketaan yhteen koko jaksolta ja pyöristetään kerran (§24). Eurot Verohallinnon mukaan (2026: 54 € / 25 €). Erityistehtävä ja päivärahan käsinvalinta päivän <b>+ Lisät</b>-napista.</p>'
     );
   }
   function kplHtml(k) {

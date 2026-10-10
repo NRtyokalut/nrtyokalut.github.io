@@ -2253,7 +2253,10 @@
       }
       perDay[d.date] = day;
     });
-    et.rows = Object.keys(et.rows).map(function (k) { const g = et.rows[k]; g.eur = round2((g.min / 60) * g.rate); return g; }).sort(function (a, b) { return a.from < b.from ? -1 : 1; });
+    // §24 like the other lisät: jakso sum rounded once (under 30 min down, 30 min or more up),
+    // paid hours split between rate periods in proportion to the minutes in each.
+    et.hours = roundTes24(et.min);
+    et.rows = Object.keys(et.rows).map(function (k) { const g = et.rows[k]; g.hours = et.min ? et.hours * (g.min / et.min) : 0; g.eur = round2(g.hours * g.rate); return g; }).sort(function (a, b) { return a.from < b.from ? -1 : 1; });
     et.eur = round2(et.rows.reduce(function (s, g) { return s + g.eur; }, 0));
     ["koko", "osa"].forEach(function (k) {
       const b = pv[k];
