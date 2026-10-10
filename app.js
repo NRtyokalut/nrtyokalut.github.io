@@ -218,8 +218,8 @@
   function personRest(p) {
     return ShiftCalc.restWithExtras(p.days, personExtras(p), personMarks(p));
   }
-  function sumPerson(p, key) {
-    return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap, personTots(p));
+  function sumPerson(p, key, tots) {
+    return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap, tots || personTots(p));
   }
   function stewardN(p) {
     const days = ShiftCalc.OT_CONFIG.periodDays;
@@ -228,8 +228,8 @@
   function stewardMinutes(p) {
     return ShiftCalc.stewardBonus(isSteward(p), null, stewardN(p));
   }
-  function activeLm(p) {
-    return sumPerson(p, "me") + stewardMinutes(p);
+  function activeLm(p, tots) {
+    return sumPerson(p, "me", tots) + stewardMinutes(p);
   }
   function activeCompany(p) {
     return sumPerson(p, "company") + stewardMinutes(p);
@@ -263,9 +263,9 @@
     const mins = ShiftCalc.stewardBonus(true, null, n);
     return "LM-tunnit +" + fmt(mins) + " (" + n + "/" + days + " pv)";
   }
-  function personOt(p) {
+  function personOt(p, tots) {
     if (!state.otEffective) return null;
-    const lm = activeLm(p);
+    const lm = activeLm(p, tots);
     if (state.dayCount !== 21) return ShiftCalc.overtimeSplit(lm, state.otEffective);
     const n = personN(p);
     if (n < 1) {
@@ -749,7 +749,7 @@
   function eur(x) {
     return x.toFixed(2).replace(".", ",") + " €";
   }
-  const FIXED_LABEL = { poikkeama: "Poikkeamakorvaus", vapaa: "Vapaa-ajan poikkeamakorvaus", peruutus: "Työvuoron peruutuskorvaus" };
+  const FIXED_LABEL = { poikkeama: "Poikkeamakorvaus", vapaa: "Vapaa-ajan poikkeamakorvaus", peruutus: "Työvuoron peruutuskorvaus", peruutusTunnit: "Peruttu vuoro" };
 
   /** Editor choice ↔ stored toteuma */
   function totChoice(t) {
@@ -762,7 +762,10 @@
     if (!t) return "";
     if (t.type === "muutos") return "Toteutui " + fmt(t.start) + "–" + fmt(t.end) + (t.oma ? " (omasta pyynnöstä)" : "");
     if (t.type === "korvattu") return "Peruttu, tilalle " + fmt(t.start) + "–" + fmt(t.end);
-    if (t.type === "peruttu") return t.late ? "Peruttu klo 17 jälkeen, ei uutta vuoroa" : "Peruttu ajoissa";
+    if (t.type === "peruttu")
+      return t.late
+        ? "Peruttu klo 17 jälkeen, ei uutta vuoroa · " + (t.korvaus ? "valittu peruutuskorvaus, tunnit eivät lasketa" : "valittu tunnit (paikallinen sopimus)")
+        : "Peruttu ajoissa";
     if (t.type === "kutsu") {
       const a = t.aStart != null ? t.aStart : t.start;
       const b = t.aEnd != null ? t.aEnd : t.end;
@@ -786,10 +789,10 @@
       const fig = c && c.kind !== "plan" ? ShiftCalc.computeShiftFigures(d.date, c.start, c.end, state.holidayMap) : null;
       const hrsTxt = fig
         ? "<br/>Lasketaan: kovat " + fmt(fig.hrs) + " · LM " + fmt(fig.me) + (planned ? " (suunniteltu LM " + fmt(d.me) + ")" : "")
-        : t.type === "peruttu" ? "<br/>Suunnitellut tunnit lasketaan (LM " + fmt(d.me) + ")" : "";
+        : t.type === "peruttu" ? (t.late && t.korvaus ? "<br/>Tunnit eivät lasketa (LM 0:00, suunniteltu " + fmt(d.me) + ")" : "<br/>Suunnitellut tunnit lasketaan (LM " + fmt(d.me) + ")") : "";
       line =
         '<div class="tot-line"><span class="tag tot">Toteuma</span> ' + totSummaryText(t) + hrsTxt +
-        (ev.length ? "<br/>" + ev.map((e) => "+ " + FIXED_LABEL[e.key] + " " + eur(e.eur)).join("<br/>") : "") +
+        (ev.filter((e) => e.eur).length ? "<br/>" + ev.filter((e) => e.eur).map((e) => "+ " + FIXED_LABEL[e.key] + " " + eur(e.eur)).join("<br/>") : "") +
         "</div>";
     }
     const c = totChoice(t);
@@ -810,7 +813,8 @@
       "</select></label>" +
       (planned
         ? '<label data-for="muutos oma korvattu">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
-          '<label data-for="muutos oma korvattu">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>'
+          '<label data-for="muutos oma korvattu">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>' +
+          peruutusChoice(p, d, t)
         : '<label data-for="kutsu">Ilmoitettu alku <input class="tot-start" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.start) : "") + '" placeholder="8:00"></label>' +
           '<label data-for="kutsu">Ilmoitettu loppu <input class="tot-end" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.end) : "") + '" placeholder="16:00"></label>' +
           '<label data-for="kutsu">Toteutunut alku (jos eri) <input class="tot-astart" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.aStart) : "") + '"></label>' +
@@ -824,9 +828,36 @@
     return { btn: btn, body: line + editor, t: t };
   }
 
+  /** Late cancellation: hours (default) OR peruutuskorvaus, with the overtime effect of each. */
+  function peruutusChoice(p, d, t) {
+    const korv = !!(t && t.type === "peruttu" && t.late && t.korvaus);
+    const rate = ShiftCalc.fixedRatesFor(d.date).peruutus;
+    const otFor = (korvaus) => {
+      const tots = Object.assign({}, personTots(p));
+      tots[d.date] = { type: "peruttu", late: true, korvaus: korvaus };
+      return personOt(p, tots);
+    };
+    let hint = "";
+    const a = otFor(false), b = otFor(true);
+    if (a && b && !a.unsupported && !b.unsupported) {
+      const txt = (o) => "lisätyö " + fmt(o.lisa) + " · 50 % " + fmt(o.yli50) + " · 100 % " + fmt(o.yli100);
+      const same = a.lisa === b.lisa && a.yli50 === b.yli50 && a.yli100 === b.yli100;
+      hint = same
+        ? "Jakson ylityöt eivät muutu (" + txt(a) + ")."
+        : "Jakson ylityöt: tunnit → " + txt(a) + "; korvaus → " + txt(b) + ".";
+    }
+    return (
+      '<fieldset class="tot-choice" data-for="peruttu_late"><legend>Valitse jompikumpi</legend>' +
+      '<label><input type="radio" name="pk-' + d.date + '" class="tot-korv" value="0"' + (korv ? "" : " checked") + "> Tunnit lasketaan (paikallinen sopimus)<small>Suunnitellut tunnit ja LM " + fmt(d.me) + " lasketaan, ei peruutuskorvausta eikä ilta-/yö-/la-/su-lisiä.</small></label>" +
+      '<label><input type="radio" name="pk-' + d.date + '" class="tot-korv" value="1"' + (korv ? " checked" : "") + "> Työvuoron peruutuskorvaus " + eur(rate) + " (tunnit eivät lasketa)<small>Koodi 1313. Vuoron tunnit 0:00 kovissa tunneissa, LM:ssä ja ylitöissä.</small></label>" +
+      (hint ? '<p class="tot-hint">' + hint + "</p>" : "") +
+      "</fieldset>"
+    );
+  }
+
   function syncTotEditor(box) {
     const v = box.querySelector(".tot-type").value;
-    box.querySelectorAll("label[data-for]").forEach((l) => {
+    box.querySelectorAll("label[data-for], fieldset[data-for]").forEach((l) => {
       l.hidden = l.dataset.for.split(" ").indexOf(v) < 0;
     });
   }
@@ -843,7 +874,13 @@
       return el && el.value.trim() !== "" && ShiftCalc.parseHM(el.value.trim()) == null;
     };
     if (v === "") return { value: null };
-    if (v === "peruttu_late" || v === "peruttu_ok") return { value: { type: "peruttu", late: v === "peruttu_late" } };
+    if (v === "peruttu_ok") return { value: { type: "peruttu", late: false } };
+    if (v === "peruttu_late") {
+      const r = box.querySelector(".tot-korv:checked");
+      const o = { type: "peruttu", late: true };
+      if (r && r.value === "1") o.korvaus = true;
+      return { value: o };
+    }
     if ([".tot-start", ".tot-end", ".tot-astart", ".tot-aend"].some(bad)) return { err: "Anna ajat muodossa h:mm." };
     const a = get(".tot-start");
     const b = get(".tot-end");
@@ -899,7 +936,7 @@
         L.events
           .map((e) => {
             const d = p.days.find((x) => x.date === e.date) || {};
-            return "<li>" + (WD_SHORT[d.weekday] || "") + " " + dateFi(e.date).slice(0, 6) + " · " + FIXED_LABEL[e.key] + " " + eur(e.eur) + " – " + e.why + "</li>";
+            return "<li>" + (WD_SHORT[d.weekday] || "") + " " + dateFi(e.date).slice(0, 6) + " · " + FIXED_LABEL[e.key] + (e.eur ? " " + eur(e.eur) : "") + " – " + e.why + "</li>";
           })
           .join("") +
         "</ul>"
@@ -920,7 +957,7 @@
       "</tbody></table>" +
       evs +
       notes +
-      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, LM:n ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Peruttu vuoro pitää suunnitellut tunnit. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
+      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, LM:n ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
   }
 
   function openDetail(personId) {

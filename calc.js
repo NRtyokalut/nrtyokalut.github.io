@@ -1402,6 +1402,7 @@
   /**
    * The shift that counts for a day (Toteuma applied), or null.
    *   no toteuma / peruttu → planned shift (kind "plan"; peruttu keeps the planned hours, local agreement)
+   *   peruttu late + korvaus → null: peruutuskorvaus chosen instead, hours count 0
    *   muutos / korvattu    → actual times (kind "actual")
    *   kutsu on a day off   → actual times, or the told times when no actual given (kind "kutsu")
    */
@@ -1409,6 +1410,8 @@
     const t = normToteuma(toteumat && toteumat[d.date]);
     if (d.start != null) {
       if (t && (t.type === "muutos" || t.type === "korvattu")) return { kind: "actual", start: t.start, end: t.end, t: t };
+      // late cancellation: Pekka chooses hours (default) OR peruutuskorvaus — never both
+      if (t && t.type === "peruttu" && t.late && t.korvaus) return null;
       return { kind: "plan", start: d.start, end: d.end, t: t };
     }
     if (t && t.type === "kutsu") {
@@ -1569,7 +1572,8 @@
   /**
    * Toteuma per day (on-device). Stored value:
    *   { type: "muutos", start, end, oma }   planned shift ran at other times (oma = own request)
-   *   { type: "peruttu", late }            cancelled, no new shift (late = notice after 17:00 the day before)
+   *   { type: "peruttu", late, korvaus }   cancelled, no new shift (late = notice after 17:00 the day before;
+   *                                       korvaus = peruutuskorvaus chosen instead of the planned hours)
    *   { type: "korvattu", start, end }     cancelled and another shift given instead
    *   { type: "kutsu", start, end, aStart, aEnd }  called in on a planned day off
    *                                       (start/end as told, aStart/aEnd actual, optional)
@@ -1640,7 +1644,8 @@
           const dv = deviation(planned, t);
           if (dv.hit) addFixed("poikkeama", d.date, "peruttu, tilalle vuoro joka " + devWhy(dv));
         } else if (t.type === "peruttu") {
-          if (t.late) addFixed("peruutus", d.date, "peruttu edellisenä päivänä klo 17 jälkeen");
+          if (t.late && t.korvaus) addFixed("peruutus", d.date, "peruttu edellisenä päivänä klo 17 jälkeen, valittu korvaus (tunnit eivät lasketa)");
+          else if (t.late) events.push({ date: d.date, key: "peruutusTunnit", eur: 0, why: "peruttu klo 17 jälkeen, valittu tunnit (suunnitellut tunnit lasketaan, ei peruutuskorvausta)" });
         }
       } else if (t && t.type === "kutsu") {
         const act = {
