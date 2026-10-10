@@ -734,10 +734,10 @@
       ' data-date="' +
       date +
       '">' +
-      '<label>Alku <input class="ex-start" inputmode="decimal" value="' +
+      '<label>Alku <input class="ex-start hm-in" inputmode="decimal" value="' +
       (fig ? fmt(fig.start) : "") +
       '" placeholder="8:00"></label>' +
-      '<label>Loppu <input class="ex-end" inputmode="decimal" value="' +
+      '<label>Loppu <input class="ex-end hm-in" inputmode="decimal" value="' +
       (fig ? fmt(fig.end) : "") +
       '" placeholder="16:00"></label>' +
       '<div class="ot-actions"><button type="button" class="ot-save ex-save" data-date="' +
@@ -1007,13 +1007,13 @@
           '<p class="tot-help" data-for="vaihto">Ajoit työkaverin vuoron (pidemmän tai lyhyemmän) ja hän ajoi sinun. Anna ajetun vuoron alku ja loppu. Kovat tunnit, Yö h ja Tunnit yhteensä lasketaan oman suunnitellun vuorosi mukaan (' + fmt(d.start) + "–" + fmt(d.end) + ', tunnit yhteensä ' + fmt(d.me) + '), joten vaihto ei lisää eikä vähennä ylitöitä (Lisälehti 11). Ilta-, yö-, la-, su- ja aattolisät lasketaan ajetun vuoron mukaan. Ei poikkeama- eikä vapaa-ajan korvausta.</p>'
         : '<p class="tot-help" data-for="">Vaihtoa vapaapäivälle ei voi merkitä. Merkitse vaihto sille päivälle, jolla oma vuorosi oli.</p>') +
       (planned
-        ? '<label data-for="muutos myohastyminen oma korvattu vaihto">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
-          '<label data-for="muutos myohastyminen oma korvattu vaihto">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>' +
+        ? '<label data-for="muutos myohastyminen oma korvattu vaihto">Toteutunut alku <input class="tot-start hm-in" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
+          '<label data-for="muutos myohastyminen oma korvattu vaihto">Toteutunut loppu <input class="tot-end hm-in" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>' +
           peruutusChoice(p, d, t)
-        : '<label data-for="kutsu">Ilmoitettu alku <input class="tot-start" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.start) : "") + '" placeholder="8:00"></label>' +
-          '<label data-for="kutsu">Ilmoitettu loppu <input class="tot-end" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.end) : "") + '" placeholder="16:00"></label>' +
-          '<label data-for="kutsu">Toteutunut alku (jos eri) <input class="tot-astart" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.aStart) : "") + '"></label>' +
-          '<label data-for="kutsu">Toteutunut loppu (jos eri) <input class="tot-aend" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.aEnd) : "") + '"></label>') +
+        : '<label data-for="kutsu">Ilmoitettu alku <input class="tot-start hm-in" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.start) : "") + '" placeholder="8:00"></label>' +
+          '<label data-for="kutsu">Ilmoitettu loppu <input class="tot-end hm-in" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.end) : "") + '" placeholder="16:00"></label>' +
+          '<label data-for="kutsu">Toteutunut alku (jos eri) <input class="tot-astart hm-in" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.aStart) : "") + '"></label>' +
+          '<label data-for="kutsu">Toteutunut loppu (jos eri) <input class="tot-aend hm-in" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.aEnd) : "") + '"></label>') +
       '<div class="ot-actions"><button type="button" class="ot-save tot-save" data-date="' + d.date + '">Tallenna</button>' +
       (t ? '<button type="button" class="ot-reset tot-del" data-date="' + d.date + '">Poista</button>' : "") +
       "</div>" +
@@ -1057,16 +1057,23 @@
     });
   }
 
+  // h:mm fields: accept 20:35 / 20,35 / 20.35 / 2035 / 835, show normalised h:mm on blur
+  document.addEventListener("focusout", (e) => {
+    const el = e.target;
+    if (!el || !el.classList || !el.classList.contains("hm-in")) return;
+    const m = ShiftCalc.parseClock(el.value);
+    if (m != null) el.value = fmt(m);
+  });
   function readTotEditor(box, d) {
     const v = box.querySelector(".tot-type").value;
     const get = (cls) => {
       const el = box.querySelector(cls);
       const s = el ? el.value.trim() : "";
-      return s === "" ? null : ShiftCalc.parseHM(s);
+      return s === "" ? null : ShiftCalc.parseClock(s);
     };
     const bad = (cls) => {
       const el = box.querySelector(cls);
-      return el && el.value.trim() !== "" && ShiftCalc.parseHM(el.value.trim()) == null;
+      return el && el.value.trim() !== "" && ShiftCalc.parseClock(el.value.trim()) == null;
     };
     if (v === "") return { value: null };
     if (v === "peruttu_ok") return { value: { type: "peruttu", late: false } };
@@ -1377,7 +1384,7 @@
       '<h4 class="auto-head">Erityistehtävä <small>(1308)</small></h4>' +
       '<div class="juna-row erpv-row">' +
       '<label>Erityistehtävä <select class="et-mode">' + o("", etMode, "Ei") + o("koko", etMode, "Koko vuoro") + o("maara", etMode, "Määrä (h:mm)") + "</select></label>" +
-      '<label class="et-min-l"' + (etMode === "maara" ? "" : " hidden") + '>Tunnit <input class="et-min" inputmode="decimal" value="' + (etMode === "maara" ? fmt(ep.et) : "") + '" placeholder="8:00"></label>' +
+      '<label class="et-min-l"' + (etMode === "maara" ? "" : " hidden") + '>Tunnit <input class="et-min hm-in" inputmode="decimal" value="' + (etMode === "maara" ? fmt(ep.et) : "") + '" placeholder="8:00"></label>' +
       "</div>" +
       '<h4 class="auto-head">Päiväraha <small>(4000 / 4010)</small></h4>' +
       '<div class="juna-row erpv-row">' +
@@ -1439,7 +1446,7 @@
     if (etMode === "koko") erpv.et = "koko";
     else if (etMode === "maara") {
       const t = box.querySelector(".et-min").value.trim();
-      const m = ShiftCalc.parseHM(t);
+      const m = ShiftCalc.parseClock(t);
       if (m == null || m <= 0) return { err: "Erityistehtävä: anna tunnit muodossa h:mm." };
       erpv.et = m;
     }
@@ -2055,8 +2062,8 @@
       btn.addEventListener("click", () => {
         const date = btn.dataset.date;
         const box = btn.closest(".extra-editor");
-        const a = ShiftCalc.parseHM(box.querySelector(".ex-start").value);
-        const b = ShiftCalc.parseHM(box.querySelector(".ex-end").value);
+        const a = ShiftCalc.parseClock(box.querySelector(".ex-start").value);
+        const b = ShiftCalc.parseClock(box.querySelector(".ex-end").value);
         openExtra = { id: p.id, date: date };
         if (a == null || b == null) {
           dayFlash = { id: p.id, date: date, msg: "Anna alku ja loppu muodossa h:mm." };

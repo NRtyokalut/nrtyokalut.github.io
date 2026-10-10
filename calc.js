@@ -479,6 +479,23 @@
     return m ? +m[1] * 60 : null;
   }
 
+  /**
+   * Kellonaika / lyhyt kesto käyttäjän syötteestä (iPhonen numeronäppäimistössä ei ole ':'):
+   * "20:35" "20,35" "20.35" "2035" → 20:35 · "835" → 8:35 · "8" → 8:00 · "24:00" ok. → minuutit tai null.
+   */
+  function parseClock(text) {
+    if (text == null) return null;
+    const t = String(text).trim().replace(/\s/g, "").replace(/[,.]/g, ":");
+    let h, mm;
+    let m = t.match(/^(\d{1,2}):(\d{2})$/);
+    if (m) (h = +m[1]), (mm = +m[2]);
+    else if ((m = t.match(/^(\d{1,2})$/))) (h = +m[1]), (mm = 0);
+    else if ((m = t.match(/^(\d{1,2})(\d{2})$/))) (h = +m[1]), (mm = +m[2]);
+    else return null;
+    if (mm >= 60 || h > 24 || (h === 24 && mm > 0)) return null;
+    return h * 60 + mm;
+  }
+
   function clampMin(x, lo, hi) {
     return Math.min(Math.max(x, lo), hi);
   }
@@ -2488,6 +2505,7 @@
     sheetMismatches,
     resolveLaskenta,
     parseHM,
+    parseClock,
     formatHM,
     summarize,
     dateKey,
