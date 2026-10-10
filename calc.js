@@ -2141,6 +2141,128 @@
     return { rows: rows, days: perDay, eur: round2(rows.reduce(function (s, r) { return s + r.eur; }, 0)), notes: notes };
   }
 
+
+  // --- Erityistehtävälisä 1308 (TES Lisäpalkkiot, erityistehtävälisä; hinta lisäpalkkiotaulukko) ---
+  // --- Päivärahat 4000/4010 (TES Lisälehti 4, 8–9 §; eurot Verohallinnon verovapaat määrät) ---
+  /**
+   * Day entry (on-device, nrtyokalut.erpv.<jakso>): { et: "koko" | minutes, pv: "koko" | "osa" | "ei" }
+   *   et "koko" = the shift actually worked (Poikkeama applied), minutes = manual amount.
+   *   pv missing = automatic from the worked shifts; a value is a manual override for the day.
+   */
+  const ERIT_CODE = "1308";
+  const ERIT_RATES = [
+    { from: "0000-00-00", eur: 12.52 },
+    { from: "2026-09-01", eur: 12.88 },
+    { from: "2027-08-01", eur: 13.19 },
+  ];
+  const PAIVARAHA_CODES = { koko: "4000", osa: "4010" };
+  /** Verohallinto: 2025 53/24 (= TES-taulukko), 2026 54/25. */
+  const PAIVARAHA_RATES = [
+    { from: "0000-00-00", koko: 53, osa: 24 },
+    { from: "2026-01-01", koko: 54, osa: 25 },
+  ];
+  /** Lisälehti 4, 9 §: osa yli 8 h, tai yli 6 h jos yli 3 h klo 16–07; koko yli 12 h (Pekka: 12 h riittää → ≥ 12 h). */
+  const PAIVARAHA_RULES = { kokoMin: 12 * 60, osaMin: 8 * 60, osaIltaMin: 6 * 60, iltaMin: 3 * 60 };
+  function byDateRate(list, key) {
+    let r = list[0];
+    list.forEach(function (x) {
+      if (key >= x.from) r = x;
+    });
+    return r;
+  }
+  function eritRateFor(key) {
+    return byDateRate(ERIT_RATES, key).eur;
+  }
+  function paivarahaRatesFor(key) {
+    return byDateRate(PAIVARAHA_RATES, key);
+  }
+  function normErpv(v) {
+    if (!v || typeof v !== "object") return null;
+    const o = {};
+    if (v.et === "koko") o.et = "koko";
+    else if (isFinite(v.et) && v.et > 0) o.et = Math.round(v.et);
+    if (v.pv === "koko" || v.pv === "osa" || v.pv === "ei") o.pv = v.pv;
+    return Object.keys(o).length ? o : null;
+  }
+  /** Shifts actually worked on a day (Poikkeama applied); a cancelled shift is not worked. Lisävuoro included. */
+  function workedShifts(d, toteumat, extras) {
+    const out = [];
+    const t = normToteuma(toteumat && toteumat[d.date]);
+    if (d.start != null) {
+      if (t && (t.type === "muutos" || t.type === "korvattu" || t.type === "vaihto")) out.push({ start: t.start, end: t.end });
+      else if (!(t && t.type === "peruttu")) out.push({ start: d.start, end: d.end });
+    } else if (t && t.type === "kutsu") {
+      out.push({ start: t.aStart != null ? t.aStart : t.start, end: t.aEnd != null ? t.aEnd : t.end });
+    }
+    const ex = extras && extras[d.date];
+    if (ex && ex.start != null && ex.end != null && !extraOverlaps(d, ex, toteumat)) out.push({ start: ex.start, end: ex.end });
+    return out;
+  }
+  /** Päiväraha for one shift from its start to end: "koko" | "osa" | null. */
+  function paivarahaForShift(start, end) {
+    const sp = shiftSpan(start, end);
+    const len = sp.e - sp.s;
+    const H = 60;
+    let ilta = 0; // minutes in 16:00–07:00
+    for (let k = -1; k <= 2; k++) ilta += ov(sp.s, sp.e, k * 1440 + 16 * H, (k + 1) * 1440 + 7 * H);
+    const R = PAIVARAHA_RULES;
+    if (len >= R.kokoMin) return "koko";
+    if (len > R.osaMin || (len > R.osaIltaMin && ilta > R.iltaMin)) return "osa";
+    return null;
+  }
+  /**
+   * Erityistehtävä + päivärahat over the jakso. Keskeytyspäivä drops the day.
+   * entries: { date: normErpv }. One päiväraha per day at most: the best of the day's worked shifts.
+   */
+  function erpvSummary(days, marks, extras, toteumat, entries) {
+    const et = { min: 0, eur: 0, rows: {} };
+    const pv = { koko: { n: 0, eur: 0, rows: {} }, osa: { n: 0, eur: 0, rows: {} } };
+    const perDay = {};
+    const notes = [];
+    (days || []).forEach(function (d) {
+      const e = normErpv(entries && entries[d.date]);
+      if (isKeskeytys(marks && marks[d.date])) {
+        if (e) notes.push({ date: d.date, msg: "Erityistehtävä/päiväraha: keskeytyspäivä, ei lasketa." });
+        return;
+      }
+      const ws = workedShifts(d, toteumat, extras);
+      const day = { et: 0, etEur: 0, pvAuto: null, pv: null, manual: false, pvEur: 0 };
+      if (e && e.et != null) {
+        const m = e.et === "koko" ? ws.reduce(function (a, w) { const sp = shiftSpan(w.start, w.end); return a + sp.e - sp.s; }, 0) : e.et;
+        const r = eritRateFor(d.date);
+        day.et = m;
+        day.etEur = round2((m / 60) * r);
+        et.min += m;
+        const g = (et.rows[r] = et.rows[r] || { rate: r, min: 0, from: d.date });
+        g.min += m;
+        if (e.et === "koko" && !m) notes.push({ date: d.date, msg: "Erityistehtävä koko vuoro, mutta päivällä ei tehtyä vuoroa." });
+      }
+      ws.forEach(function (w) {
+        const x = paivarahaForShift(w.start, w.end);
+        if (x === "koko" || (x === "osa" && !day.pvAuto)) day.pvAuto = x;
+      });
+      day.pv = e && e.pv ? (e.pv === "ei" ? null : e.pv) : day.pvAuto;
+      day.manual = !!(e && e.pv);
+      if (day.pv) {
+        const r = paivarahaRatesFor(d.date)[day.pv];
+        day.pvEur = r;
+        const b = pv[day.pv];
+        b.n += 1;
+        const g = (b.rows[r] = b.rows[r] || { rate: r, n: 0, from: d.date });
+        g.n += 1;
+      }
+      perDay[d.date] = day;
+    });
+    et.rows = Object.keys(et.rows).map(function (k) { const g = et.rows[k]; g.eur = round2((g.min / 60) * g.rate); return g; }).sort(function (a, b) { return a.from < b.from ? -1 : 1; });
+    et.eur = round2(et.rows.reduce(function (s, g) { return s + g.eur; }, 0));
+    ["koko", "osa"].forEach(function (k) {
+      const b = pv[k];
+      b.rows = Object.keys(b.rows).map(function (r) { const g = b.rows[r]; g.eur = round2(g.n * g.rate); return g; }).sort(function (a, c) { return a.from < c.from ? -1 : 1; });
+      b.eur = round2(b.rows.reduce(function (s, g) { return s + g.eur; }, 0));
+    });
+    return { et: et, pv: pv, days: perDay, notes: notes, eur: round2(et.eur + pv.koko.eur + pv.osa.eur) };
+  }
+
   /**
    * Yksin- vai kaksinajo vuorotaulusta (Pekan työpaikan käytäntö, ei TES-sääntö): jos jollakin muulla
    * lomakkeen henkilöllä on samana päivänä täsmälleen sama suunniteltu vuoro (sama alku- ja loppuaika
@@ -2326,5 +2448,16 @@
     kplRatesFor,
     normKpl,
     kplSummary,
+    ERIT_CODE,
+    ERIT_RATES,
+    eritRateFor,
+    PAIVARAHA_CODES,
+    PAIVARAHA_RATES,
+    PAIVARAHA_RULES,
+    paivarahaRatesFor,
+    paivarahaForShift,
+    normErpv,
+    workedShifts,
+    erpvSummary,
   };
 });

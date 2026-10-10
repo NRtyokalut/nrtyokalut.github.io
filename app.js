@@ -851,7 +851,7 @@
     const head = ["Kiinteä palkka (€/kk)", "Koodi", "€/kk"];
     const rows = items.map((x) => [x[0], x[1], eur(x[2])]);
     rows.push({ cls: pdf ? "pv-sum" : "lisat-sum", cells: ["<b>Yhteensä / kk</b>" + (w ? "" : " <small>(kuukausipalkka puuttuu)</small>"), "", eur(sum)] });
-    rows.push({ cls: pdf ? "pv-sum" : "lisat-sum", cells: ["<b>Jakson lisät yhteensä</b> <small>(tuntilisät arvio + korvaukset + päivystysrahat + veturiraha + autolla-ajo)</small>", "", eur(lisatTotal)] });
+    rows.push({ cls: pdf ? "pv-sum" : "lisat-sum", cells: ["<b>Jakson lisät yhteensä</b> <small>(tuntilisät arvio + korvaukset + päivystysrahat + erityistehtävä + päivärahat + veturiraha + autolla-ajo)</small>", "", eur(lisatTotal)] });
     if (pdf) return pvTable(head, rows);
     return (
       '<table class="lisat-table kiintea-table"><thead><tr>' + head.map((h) => "<th>" + h + "</th>").join("") + "</tr></thead><tbody>" +
@@ -860,7 +860,7 @@
     );
   }
   function jaksoLisatTotal(p, L, LE) {
-    return Math.round((LE.total + L.fixedTotal + personKpl(p).eur + personVeturiraha(p).eur + personAutoajo(p).eur) * 100) / 100;
+    return Math.round((LE.total + L.fixedTotal + personKpl(p).eur + personErpv(p).eur + personVeturiraha(p).eur + personAutoajo(p).eur) * 100) / 100;
   }
   const ARVIO = '<span class="arvio">arvio</span>';
   function lisaRateText(it) {
@@ -1116,6 +1116,18 @@
   function saveKpl(p, date, v) {
     saveDayList(LISAT_PREFIX, p, date, ShiftCalc.normKpl(v));
   }
+  // Erityistehtävä + päivärahan käsinvalinta per päivä: { [personKey]: { [date]: { et, pv } } }, own key.
+  const ERPV_PREFIX = "nrtyokalut.erpv.";
+  function personErpvDays(p) {
+    return loadDayListMap(ERPV_PREFIX)[laskKey(p)] || {};
+  }
+  function saveErpv(p, date, v) {
+    saveDayList(ERPV_PREFIX, p, date, ShiftCalc.normErpv(v));
+  }
+  function personErpv(p) {
+    return ShiftCalc.erpvSummary(p.days, personMarks(p), personExtras(p), personTots(p), personErpvDays(p));
+  }
+  const PV_LABEL = { koko: "Kokopäiväraha", osa: "Osapäiväraha" };
   function personKpl(p) {
     return ShiftCalc.kplSummary(personKplDays(p), (date) => isSickDay(p, { date: date }));
   }
@@ -1193,7 +1205,10 @@
     const list = (personJunat(p)[d.date] || []).map(ShiftCalc.normJuna).filter(Boolean);
     const autos = (personAutoajot(p)[d.date] || []).map(ShiftCalc.normAutoajo).filter(Boolean);
     const kpl = ShiftCalc.normKpl(personKplDays(p)[d.date]);
-    const n = list.length + autos.length + (kpl ? 1 : 0);
+    const ep = ShiftCalc.normErpv(personErpvDays(p)[d.date]);
+    const epS = personErpv(p);
+    const epDay = epS.days[d.date];
+    const n = list.length + autos.length + (kpl ? 1 : 0) + (ep ? 1 : 0);
     const open = openJuna && openJuna.id === p.id && openJuna.date === d.date;
     const btn =
       '<button type="button" class="juna-toggle' + (n ? " on" : "") + '" data-date="' + d.date + '">' +
@@ -1239,6 +1254,13 @@
               })
               .join(" · ")
           : "") +
+        (ep && epDay
+          ? "<br/>" +
+            [
+              epDay.et ? "Erityistehtävä " + fmt(epDay.et) + (ep.et === "koko" ? " (koko vuoro)" : "") + " = <b>" + eur(epDay.etEur) + "</b>" : "",
+              ep.pv ? (epDay.pv ? PV_LABEL[epDay.pv] + " <b>" + eur(epDay.pvEur) + "</b>" : "Ei päivärahaa") + " (käsin)" : "",
+            ].filter(Boolean).join(" · ")
+          : "") +
         (counted.length + cAuto.length + (kDay ? 1 : 0) > 1 ? "<br/>Päivä yhteensä <b>" + eur(dayEur) + "</b>" : "") +
         "</div>";
     }
@@ -1259,11 +1281,32 @@
       ).join("") +
       "</div>" +
       '<p class="tot-help">Ratapihavuoron ulkopuolella yksi päivystysraha tehtävää kohden; saman tunnin tehtävistä vain yksi.</p>' +
+      erpvEditorHtml(d, ep, epDay) +
       '<div class="ot-actions"><button type="button" class="ot-save j-save" data-date="' + d.date + '">Tallenna</button>' +
       (n ? '<button type="button" class="ot-reset j-del" data-date="' + d.date + '">Poista kaikki</button>' : "") +
       "</div>" +
       "</div>";
     return { btn: btn, body: line + editor, n: n };
+  }
+  function erpvEditorHtml(d, ep, epDay) {
+    const etMode = ep && ep.et != null ? (ep.et === "koko" ? "koko" : "maara") : "";
+    const o = (v, cur, label) => '<option value="' + v + '"' + (cur === v ? " selected" : "") + ">" + label + "</option>";
+    const pvAuto = epDay ? epDay.pvAuto : null;
+    const pvCur = ep && ep.pv ? ep.pv : "";
+    return (
+      '<h4 class="auto-head">Erityistehtävä <small>(1308)</small></h4>' +
+      '<div class="juna-row erpv-row">' +
+      '<label>Erityistehtävä <select class="et-mode">' + o("", etMode, "Ei") + o("koko", etMode, "Koko vuoro") + o("maara", etMode, "Määrä (h:mm)") + "</select></label>" +
+      '<label class="et-min-l"' + (etMode === "maara" ? "" : " hidden") + '>Tunnit <input class="et-min" inputmode="decimal" value="' + (etMode === "maara" ? fmt(ep.et) : "") + '" placeholder="8:00"></label>' +
+      "</div>" +
+      '<h4 class="auto-head">Päiväraha <small>(4000 / 4010)</small></h4>' +
+      '<div class="juna-row erpv-row">' +
+      '<label>Päiväraha <select class="pv-mode">' +
+      o("", pvCur, "Automaattinen (" + (pvAuto ? PV_LABEL[pvAuto].toLowerCase() : "ei päivärahaa") + ")") +
+      o("koko", pvCur, "Kokopäiväraha") + o("osa", pvCur, "Osapäiväraha") + o("ei", pvCur, "Ei päivärahaa") +
+      "</select></label>" +
+      "</div>"
+    );
   }
   function readJunaEditor(box) {
     const out = [];
@@ -1311,7 +1354,18 @@
       if (!isFinite(v) || v < 0 || Math.floor(v) !== v) return { err: ShiftCalc.KPL_LABELS[k] + ": anna kokonaisluku (kpl)." };
       if (v > 0) kpl[k] = v;
     }
-    return { value: out, autos: autos, kpl: kpl };
+    const erpv = {};
+    const etMode = box.querySelector(".et-mode") ? box.querySelector(".et-mode").value : "";
+    if (etMode === "koko") erpv.et = "koko";
+    else if (etMode === "maara") {
+      const t = box.querySelector(".et-min").value.trim();
+      const m = ShiftCalc.parseHM(t);
+      if (m == null || m <= 0) return { err: "Erityistehtävä: anna tunnit muodossa h:mm." };
+      erpv.et = m;
+    }
+    const pvm = box.querySelector(".pv-mode") ? box.querySelector(".pv-mode").value : "";
+    if (pvm) erpv.pv = pvm;
+    return { value: out, autos: autos, kpl: kpl, erpv: erpv };
   }
   const WD_JS = ["Su", "Ma", "Ti", "Ke", "To", "Pe", "La"];
   function dayLabel(iso) {
@@ -1388,6 +1442,29 @@
     );
   }
 
+  /** Rows [label, small, code, amount, €] for erityistehtävä + päivärahat (rate split by date). */
+  function erpvRows(E) {
+    const rows = [];
+    const multi = (list) => list.length > 1;
+    const etList = E.et.rows.length ? E.et.rows : [{ rate: ShiftCalc.eritRateFor(state.startDate), min: 0, eur: 0, from: state.startDate }];
+    etList.forEach((g) => rows.push(["Erityistehtävälisä", rateFi(g.rate) + " €/h" + (multi(etList) ? " · " + dateFi(g.from).slice(0, 6) + " alk." : ""), ShiftCalc.ERIT_CODE, fmt(g.min), eur(g.eur)]));
+    ["koko", "osa"].forEach((k) => {
+      const b = E.pv[k];
+      const list = b.rows.length ? b.rows : [{ rate: ShiftCalc.paivarahaRatesFor(state.startDate)[k], n: 0, eur: 0, from: state.startDate }];
+      list.forEach((g) => rows.push([PV_LABEL[k], eur(g.rate) + " / pv" + (multi(list) ? " · " + dateFi(g.from).slice(0, 6) + " alk." : ""), ShiftCalc.PAIVARAHA_CODES[k], g.n + " pv", eur(g.eur)]));
+    });
+    return rows;
+  }
+  function erpvHtml(E) {
+    return (
+      '<table class="lisat-table erpv-codes"><thead><tr><th>Erityistehtävä ja päivärahat</th><th>Koodi</th><th>Määrä</th><th>€</th></tr></thead><tbody>' +
+      erpvRows(E).map((r) => "<tr><td><b>" + r[0] + "</b><small>" + r[1] + "</small></td><td>" + r[2] + "</td><td>" + r[3] + '</td><td class="lisat-pay">' + r[4] + "</td></tr>").join("") +
+      '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(E.eur) + "</td></tr>" +
+      "</tbody></table>" +
+      notesHtml(E.notes) +
+      '<p class="ot-meta lisat-note">Päiväraha lasketaan automaattisesti tehdyn vuoron alusta loppuun (poikkeamat huomioiden): kokopäiväraha vähintään 12 h, osapäiväraha yli 8 h tai yli 6 h, jos yli 3 h osuu klo 16–07 (TES Lisälehti 4, 9 §). Yksi päiväraha päivässä. Eurot Verohallinnon mukaan (2026: 54 € / 25 €). Erityistehtävä ja päivärahan käsinvalinta päivän <b>+ Lisät</b>-napista.</p>'
+    );
+  }
   function kplHtml(k) {
     if (!k.rows.length && !k.notes.length) return "";
     return (
@@ -1469,6 +1546,7 @@
       evs +
       notes +
       kplHtml(personKpl(p)) +
+      erpvHtml(personErpv(p)) +
       '<div class="vr-block">' + veturirahaHtml(personVeturiraha(p)) + autoajoHtml(personAutoajo(p)) + "</div>" +
       palkkioHtml(p) +
       kiinteaHtml(p, jaksoLisatTotal(p, L, LE)) +
@@ -1571,6 +1649,19 @@
             return [dayLabel(d.date), n("pr"), n("pr2"), n("tpr"), n("kal"), eur(d.eur)];
           }))
         : "") +
+      (() => {
+        const E = personErpv(p);
+        const dl = Object.keys(E.days).sort().filter((dt) => E.days[dt].pv || E.days[dt].et || E.days[dt].manual);
+        return (
+          pvTable(["Erityistehtävä ja päivärahat", "Koodi", "Määrä", "€"], erpvRows(E).map((r) => [r[0] + " <small>" + r[1] + "</small>", r[2], r[3], r[4]]).concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(E.eur)] }])) +
+          (dl.length
+            ? pvTable(["Päivä", "Erityistehtävä", "Päiväraha", "€"], dl.map((dt) => {
+                const x = E.days[dt];
+                return [dayLabel(dt), x.et ? fmt(x.et) : "", x.pv ? PV_LABEL[x.pv] + (x.manual ? " (käsin)" : "") : x.manual ? "Ei (käsin)" : "", eur(Math.round((x.etEur + x.pvEur) * 100) / 100)];
+              }))
+            : "")
+        );
+      })() +
       (vr.rows.length
         ? pvTable(["Veturiraha palkkalajeittain", "Koodi", "Km", "€"], vr.rows.map((r) => [r.label + " <small>" + String(r.rate).replace(".", ",") + " €/km</small>", r.code, numFi(r.km), eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Veturiraha yhteensä</b>", "", numFi(vr.km), eur(vr.eur)] }]))
         : "") +
@@ -1978,6 +2069,8 @@
         if (row.classList.contains("auto-row") || box.querySelectorAll(".juna-rows .juna-row").length > 1) row.remove();
         else row.querySelectorAll("input:not([type=checkbox])").forEach((i) => (i.value = ""));
       });
+      const etSel = box.querySelector(".et-mode");
+      if (etSel) etSel.addEventListener("change", () => (box.querySelector(".et-min-l").hidden = etSel.value !== "maara"));
       box.querySelector(".j-save").addEventListener("click", () => {
         const date = box.dataset.date;
         openJuna = { id: p.id, date: date };
@@ -1996,6 +2089,7 @@
         saveJunat(p, date, r.value);
         saveAutoajot(p, date, r.autos);
         saveKpl(p, date, r.kpl);
+        saveErpv(p, date, r.erpv);
         dayFlash = null;
         openJuna = null;
         redraw();
@@ -2006,6 +2100,7 @@
           saveJunat(p, box.dataset.date, null);
           saveAutoajot(p, box.dataset.date, null);
           saveKpl(p, box.dataset.date, null);
+          saveErpv(p, box.dataset.date, null);
           dayFlash = null;
           openJuna = null;
           redraw();
