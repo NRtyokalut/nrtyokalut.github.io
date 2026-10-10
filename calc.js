@@ -394,6 +394,21 @@
     { from: "2026-09-01", eur: 165 },
     { from: "2027-08-01", eur: 169 },
   ];
+  /** Opetuskuljettajan henkilökohtainen lisäpalkkio €/kk (TES lisäpalkkiotaulukko, palkkalaji 1315). */
+  const OPETUS_CODE = "1315";
+  const OPETUS_RATES = [
+    { from: "0000-00-00", k1: 123.0, k2: 169.0 },
+    { from: "2026-09-01", k1: 126.36, k2: 173.43 },
+    { from: "2027-08-01", k1: 129.39, k2: 177.59 },
+  ];
+  function opetusFor(n, key) {
+    if (n !== 1 && n !== 2) return 0;
+    let r = OPETUS_RATES[0];
+    OPETUS_RATES.forEach(function (x) {
+      if (key >= x.from) r = x;
+    });
+    return n === 1 ? r.k1 : r.k2;
+  }
   function palkkioFor(key) {
     let r = PALKKIO_RATES[0];
     PALKKIO_RATES.forEach(function (x) {
@@ -2439,6 +2454,10 @@
     OT_CONFIG,
     STEWARD_STORAGE_KEY: "nrtyokalut.lm",
     TSV_STORAGE_KEY: "nrtyokalut.tsv",
+    OPETUS_STORAGE_KEY: "nrtyokalut.opetus",
+    OPETUS_CODE,
+    OPETUS_RATES,
+    opetusFor,
     PALKKIO_RATES,
     palkkioFor,
     palkkioRatesInRange,

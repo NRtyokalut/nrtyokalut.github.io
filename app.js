@@ -271,6 +271,28 @@
       else localStorage.setItem(key, JSON.stringify(next));
     } catch (e) {}
   }
+  // Opetuskuljettaja: { [name]: 1 | 2 } (kokonaisuuksia), remembered by name like TSV; palkkio only.
+  function loadOpetusMap() {
+    try {
+      return JSON.parse(localStorage.getItem(ShiftCalc.OPETUS_STORAGE_KEY) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function opetusN(p) {
+    const n = loadOpetusMap()[p.name];
+    return n === 1 || n === 2 ? n : 0;
+  }
+  function setOpetus(p, n) {
+    const m = loadOpetusMap();
+    if (n === 1 || n === 2) m[p.name] = n;
+    else delete m[p.name];
+    try {
+      const key = ShiftCalc.OPETUS_STORAGE_KEY;
+      if (!Object.keys(m).length) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(m));
+    } catch (e) {}
+  }
   function stewardLabel() {
     const m = ShiftCalc.stewardBonus(true);
     const h = m % 60 === 0 ? String(m / 60) : ShiftCalc.formatHM(m);
@@ -884,6 +906,7 @@
     items.push(["NR-lisä", ShiftCalc.NR_LISA.code, ShiftCalc.NR_LISA.eur]);
     if (isSteward(p)) items.push(["Luottamusmiespalkkio", "–", pr]);
     if (isTsv(p)) items.push(["Työsuojeluvaltuutetun palkkio", "–", pr]);
+    if (opetusN(p)) items.push(["Opetuskuljettajapalkkio (" + (opetusN(p) === 1 ? "1 kokonaisuus" : "2 kokonaisuutta") + ")", ShiftCalc.OPETUS_CODE, ShiftCalc.opetusFor(opetusN(p), endKey)]);
     const sum = Math.round(items.reduce((a, x) => a + x[2], 0) * 100) / 100;
     const head = ["Kiinteä palkka (€/kk)", "Koodi", "€/kk"];
     const rows = items.map((x) => [x[0], x[1], eur(x[2])]);
@@ -1666,7 +1689,7 @@
     const pk = [];
     if (isSteward(p)) pk.push(["Luottamusmiespalkkio", rates, "maksetaan 10 kk/vuosi (varamiehelle 2 kk)"]);
     if (isTsv(p)) pk.push(["Työsuojeluvaltuutetun palkkio", rates, "12 kk/vuosi (varahenkilölle 2 kk)"]);
-    const flags = [isSteward(p) ? "LM (+8 h)" : "", isTsv(p) ? "TSV" : ""].filter(Boolean).join(" · ");
+    const flags = [isSteward(p) ? "LM (+8 h)" : "", isTsv(p) ? "TSV" : "", opetusN(p) ? "Opetuskuljettaja " + opetusN(p) : ""].filter(Boolean).join(" · ");
     const html =
       '<header class="pv-head"><h1>Jakso päiväkirja</h1><p><b>' + escHtml(p.name) + "</b> · " + (state.group ? escHtml(state.group) + " · " : "") + (state.periodLabel ? escHtml(state.periodLabel) + " · " : "") + jaksoRange() +
       (flags ? " · " + flags : "") + "</p><p class=\"pv-meta\">Tulostettu " + dateFi(new Date().toISOString().slice(0, 10)) + "</p></header>" +
@@ -1945,6 +1968,18 @@
         renderLisat(p, personLisat(p));
       }
     };
+    const syncOpetus = () => {
+      $("opetus1Check").checked = opetusN(p) === 1;
+      $("opetus2Check").checked = opetusN(p) === 2;
+    };
+    syncOpetus();
+    [1, 2].forEach((n) => {
+      $("opetus" + n + "Check").onchange = () => {
+        setOpetus(p, $("opetus" + n + "Check").checked ? n : 0);
+        syncOpetus();
+        renderLisat(p, personLisat(p));
+      };
+    });
     $("tsvCheck").checked = isTsv(p);
     $("tsvCheck").onchange = () => {
       setTsv(p, $("tsvCheck").checked);
