@@ -1978,17 +1978,17 @@
 
   /**
    * Kappalemääräiset lisät, jotka käyttäjä syöttää itse päivittäin (TES Lisäpalkkiot):
-   * päivystysraha 1301, kaksinkertainen päivystysraha 1304, kaluston tarkastuspalkkio 1310.
+   * päivystysraha 1301, kaksinkertainen päivystysraha 1304, päivystysraha tallipäivystyksessä 1302, kaluston tarkastuspalkkio 1310.
    * Ei automaattista logiikkaa: ratapihavuoron ulkopuolella yksi päivystysraha tehtävää kohden ja saman tunnin
    * tehtävistä vain yksi, mutta käyttäjä syöttää lopullisen kappalemäärän. Hinta päivän mukaan.
    */
-  const KPL_KEYS = ["pr", "pr2", "kal"];
-  const KPL_LABELS = { pr: "Päivystysraha", pr2: "Päivystysraha kaksinkertainen", kal: "Kaluston tarkastuspalkkio" };
-  const KPL_CODES = { pr: "1301", pr2: "1304", kal: "1310" };
+  const KPL_KEYS = ["pr", "pr2", "tpr", "kal"];
+  const KPL_LABELS = { pr: "Päivystysraha", pr2: "Päivystysraha kaksinkertainen", tpr: "Päivystysraha tallipäivystyksessä", kal: "Kaluston tarkastuspalkkio" };
+  const KPL_CODES = { pr: "1301", pr2: "1304", tpr: "1302", kal: "1310" };
   const KPL_RATES = [
-    { from: "0000-00-00", pr: 5.6, pr2: 11.2, kal: 8.66 },
-    { from: "2026-09-01", pr: 5.76, pr2: 11.52, kal: 8.91 },
-    { from: "2027-08-01", pr: 5.9, pr2: 11.8, kal: 9.12 },
+    { from: "0000-00-00", pr: 5.6, pr2: 11.2, tpr: 4.06, kal: 8.66 },
+    { from: "2026-09-01", pr: 5.76, pr2: 11.52, tpr: 4.18, kal: 8.91 },
+    { from: "2027-08-01", pr: 5.9, pr2: 11.8, tpr: 4.28, kal: 9.12 },
   ];
   function kplRatesFor(key) {
     let r = KPL_RATES[0];

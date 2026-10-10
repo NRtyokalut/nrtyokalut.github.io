@@ -1296,7 +1296,7 @@
       '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(k.eur) + "</td></tr>" +
       "</tbody></table>" +
       notesHtml(k.notes) +
-      '<p class="ot-meta lisat-note">Määrät syötetään päivän <b>+ Juna / lisät</b>-napista. Hinta päivän mukaan (1.9.2026 alkaen uudet, 1.8.2027 alkaen 2027 hinnat).</p>'
+      '<p class="ot-meta lisat-note">Määrät syötetään päivän <b>+ Juna / lisät</b>-napista. Hinta päivän mukaan (1.9.2026 ja 1.8.2027 alkaen uudet hinnat).</p>'
     );
   }
   function renderLisat(p, lisat) {
@@ -1449,9 +1449,9 @@
       pvTable(["Korvaus", "Koodi", "Määrä", "€"], fixedRows.concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(L.fixedTotal)] }])) +
       (kp.rows.length
         ? pvTable(["Päivystysrahat ja tarkastuspalkkiot", "Koodi", "Kpl", "€"], kp.rows.map((r) => [r.label + " <small>" + eur(r.rate) + " / kpl" + (kp.rows.filter((x) => x.key === r.key).length > 1 ? " · " + dateFi(r.from).slice(0, 6) + " alk." : "") + "</small>", r.code, r.n, eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(kp.eur)] }])) +
-          pvTable(["Päivä", "Päivystysraha", "Kaksinkertainen", "Tarkastus", "€"], kp.days.map((d) => {
+          pvTable(["Päivä", "Päivystysraha", "Kaksinkertainen", "Tallipäivystys", "Tarkastus", "€"], kp.days.map((d) => {
             const n = (k) => { const it = d.items.find((x) => x.key === k); return it ? it.n : ""; };
-            return [dayLabel(d.date), n("pr"), n("pr2"), n("kal"), eur(d.eur)];
+            return [dayLabel(d.date), n("pr"), n("pr2"), n("tpr"), n("kal"), eur(d.eur)];
           }))
         : "") +
       (vr.rows.length
