@@ -1542,7 +1542,13 @@
       '<p class="ot-meta lisat-note">Määrät syötetään päivän <b>+ Lisät</b>-napista. Hinta päivän mukaan (1.9.2026 ja 1.8.2027 alkaen uudet hinnat).</p>'
     );
   }
+  function paintRoleSum(p) {
+    const el = $("roleSum");
+    if (!el) return;
+    el.textContent = [isSteward(p) ? "LM" : "", isTsv(p) ? "TSV" : "", opetusN(p) ? "Opetus " + opetusN(p) : ""].filter(Boolean).join(" · ");
+  }
   function renderLisat(p, lisat) {
+    paintRoleSum(p);
     const L = lisat;
     const C = ShiftCalc.LISA_CODES;
     const rows = [
