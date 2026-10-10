@@ -267,6 +267,17 @@
     return map;
   }
 
+  /** TES §21 aattopäivät: pääsiäislauantai, juhannusaatto, jouluaatto (else ""). */
+  function aattoName(d) {
+    if (!d) return "";
+    const y = d.getFullYear();
+    const k = dateKey(d);
+    if (k === dateKey(addDays(easterSunday(y), -1))) return "Pääsiäislauantai";
+    if (k === dateKey(addDays(saturdayOnOrAfter(y, 5, 20), -1))) return "Juhannusaatto";
+    if (d.getMonth() === 11 && d.getDate() === 24) return "Jouluaatto";
+    return "";
+  }
+
   function holidayName(d) {
     const y = d.getFullYear();
     const map = Object.assign({}, holidaysForYear(y), holidaysForYear(y + 1), holidaysForYear(y - 1));
@@ -647,20 +658,22 @@
     const X = nextSegs[0],
       Y = nextSegs[1],
       Z = nextSegs[2];
+    // TES §18: work started at the latest 04:00 that runs past 06:00 is night work
+    // until 12:00 (no rest info in the form). S === 2 h means the shift covers 04–06.
     let n = R + S;
-    if (S + R > EARLY_FULL && S === EARLY_FULL) n += T;
+    if (S === EARLY_FULL) n += T;
     n += W + X + Y;
-    if (Y + X > EARLY_FULL && Y === EARLY_FULL) n += Z;
+    if (Y === EARLY_FULL) n += Z;
     return n;
   }
 
   /** 25% bonus AC */
-  function bonus25(weekday, holidayToday, holidayTomorrow, curSegs, nextSegs) {
-    // AB10=Perjantai, AC10=Lauantai
-    if (weekday === "Perjantai" && !holidayTomorrow) {
+  function bonus25(weekday, holidayToday, holidayTomorrow, curSegs, nextSegs, aattoToday, aattoTomorrow) {
+    // AB10=Perjantai, AC10=Lauantai. TES §19: not on pääsiäislauantai, not when aattopäivänlisä is paid.
+    if (weekday === "Perjantai" && !holidayTomorrow && !aattoTomorrow) {
       return nextSegs[2] + nextSegs[3]; // Z+AA
     }
-    if (weekday === "Lauantai" && !holidayToday) {
+    if (weekday === "Lauantai" && !holidayToday && !aattoToday) {
       return curSegs[2] + curSegs[3]; // T+U
     }
     return 0;
@@ -760,7 +773,7 @@
         const nextSegs = K > 0 ? allSegOverlaps(J, K, SEG_NEXT) : [0, 0, 0, 0];
 
         night = nightMinutes(curSegs, nextSegs);
-        b25 = bonus25(wd, !!hol, !!holTom, curSegs, nextSegs);
+        b25 = bonus25(wd, !!hol, !!holTom, curSegs, nextSegs, !!aattoName(d), !!aattoName(tomorrow));
         b100 = bonus100Full(wd, wdTom, !!hol, !!holTom, curSegs, nextSegs);
 
         me = mroundMin(hrs + night * NIGHT_FACTOR);
@@ -836,7 +849,7 @@
     const curSegs = allSegOverlaps(startMin, I, SEG_CUR);
     const nextSegs = K > 0 ? allSegOverlaps(0, K, SEG_NEXT) : [0, 0, 0, 0];
     const night = nightMinutes(curSegs, nextSegs);
-    const b25 = bonus25(wd, !!hol, !!holTom, curSegs, nextSegs);
+    const b25 = bonus25(wd, !!hol, !!holTom, curSegs, nextSegs, !!aattoName(d), !!aattoName(tomorrow));
     const b100 = bonus100Full(wd, wdTom, !!hol, !!holTom, curSegs, nextSegs);
     const me = mroundMin(hrs + night * NIGHT_FACTOR);
     return {
@@ -1426,6 +1439,189 @@
     return (days || []).filter(function (d) { return d.check != null && d.check > 0; });
   }
 
+  // --- Lisät (TES III luku §17–§22, §24) and §6 peruutuskorvaus ---
+  /**
+   * Time windows (minutes from the shift's own date 00:00, k = day offset):
+   *   ilta  §17  every day 18–21
+   *   yö    §18  21–06, plus work started at the latest 04:00 that runs past 06:00
+   *              counts as night until 12:00 (no rest info → no 2 h rest break)
+   *   la    §19  arkilauantai 06–18; not pääsiäislauantai, not a holiday Saturday,
+   *              not when aattopäivänlisä is paid (jouluaatto on a Saturday)
+   *   su    §20  Sunday / kirkollinen juhlapäivä / itsenäisyyspäivä / vappu 00–24
+   *              and the day before 18–24
+   *   aatto §21  pääsiäislauantai, juhannusaatto, jouluaatto 00–18
+   */
+  const LISA_KEYS = ["ilta", "yo", "la", "su", "aatto"];
+  const LISA_CODES = { ilta: "1420", yo: "1421", la: "1430", su: "1400", aatto: "", poikkeama: "1312", vapaa: "1311", peruutus: "1313" };
+  /** Fixed-euro items by date (TES lisäpalkkiotaulukko; peruutus = 2 × työhönsidonnaisuuslisä, §6). */
+  const FIXED_RATES = [
+    { from: "0000-00-00", poikkeama: 36.12, vapaa: 22.85, peruutus: 56.08 },
+    { from: "2026-09-01", poikkeama: 37.17, vapaa: 23.51, peruutus: 57.7 },
+    { from: "2027-08-01", poikkeama: 38.06, vapaa: 24.07, peruutus: 59.08 },
+  ];
+  const LATE_END_MIN = 30;
+
+  function fixedRatesFor(key) {
+    let r = FIXED_RATES[0];
+    FIXED_RATES.forEach(function (x) {
+      if (key >= x.from) r = x;
+    });
+    return r;
+  }
+
+  function ov(s, e, a, b) {
+    return Math.max(0, Math.min(e, b) - Math.max(s, a));
+  }
+
+  function asDate(date) {
+    return date instanceof Date ? new Date(date.getFullYear(), date.getMonth(), date.getDate()) : toDate(date);
+  }
+
+  /** start/end minutes of one shift → absolute minutes from its date 00:00 (end after start). */
+  function shiftSpan(start, end) {
+    return { s: start, e: end <= start ? end + 24 * 60 : end };
+  }
+
+  function isSundayLike(d, holidayMap) {
+    return d.getDay() === 0 || !!(holidayMap && holidayMap[dateKey(d)]);
+  }
+
+  /** Lisä minutes of one shift (any length up to 48 h). */
+  function lisaShiftMinutes(date, startMin, endMin, holidayMap) {
+    const d = asDate(date);
+    const out = { ilta: 0, yo: 0, la: 0, su: 0, aatto: 0 };
+    if (!d || startMin == null || endMin == null) return out;
+    const sp = shiftSpan(startMin, endMin);
+    const s = sp.s,
+      e = sp.e;
+    const H = 60,
+      DAY = 24 * 60;
+    for (let k = -1; k <= 2; k++) {
+      const o = k * DAY;
+      const day = addDays(d, k);
+      out.ilta += ov(s, e, o + 18 * H, o + 21 * H);
+      // night 21:00 (day k) → 06:00 (day k+1)
+      out.yo += ov(s, e, o + 21 * H, o + DAY + 6 * H);
+      // continuation on morning k: started ≤ 04:00 and still working after 06:00
+      if (s <= o + 4 * H && e > o + 6 * H) out.yo += ov(s, e, o + 6 * H, o + 12 * H);
+      const aatto = aattoName(day);
+      if (day.getDay() === 6 && !(holidayMap && holidayMap[dateKey(day)]) && !aatto) {
+        out.la += ov(s, e, o + 6 * H, o + 18 * H);
+      }
+      if (isSundayLike(day, holidayMap)) out.su += ov(s, e, o, o + DAY);
+      else if (isSundayLike(addDays(day, 1), holidayMap)) out.su += ov(s, e, o + 18 * H, o + DAY);
+      if (aatto) out.aatto += ov(s, e, o, o + 18 * H);
+    }
+    return out;
+  }
+
+  /** §24: jakso total to whole hours; under 30 min down, 30 min or more up. */
+  function roundTes24(min) {
+    if (min == null) return null;
+    const h = Math.floor(min / 60);
+    return min - h * 60 >= 30 ? h + 1 : h;
+  }
+
+  /**
+   * Toteuma per day (on-device). Stored value:
+   *   { type: "muutos", start, end, oma }   planned shift ran at other times (oma = own request)
+   *   { type: "peruttu", late }            cancelled, no new shift (late = notice after 17:00 the day before)
+   *   { type: "korvattu", start, end }     cancelled and another shift given instead
+   *   { type: "kutsu", start, end, aStart, aEnd }  called in on a planned day off
+   *                                       (start/end as told, aStart/aEnd actual, optional)
+   */
+  const TOTEUMA_TYPES = ["muutos", "peruttu", "korvattu", "kutsu"];
+
+  function normToteuma(v) {
+    if (!v || typeof v !== "object" || TOTEUMA_TYPES.indexOf(v.type) < 0) return null;
+    return v;
+  }
+
+  /** Poikkeama check between a reference (planned/told) shift and the shift actually worked. */
+  function deviation(ref, act) {
+    const a = shiftSpan(ref.start, ref.end);
+    const b = shiftSpan(act.start, act.end);
+    const early = b.s < a.s;
+    const late = b.e - a.e;
+    return { early: early, lateMin: late, hit: early || late >= LATE_END_MIN };
+  }
+
+  /**
+   * Lisät for one person over the jakso.
+   * days: computePerson rows; marks: keskeytys map; extras: lisävuorot; toteumat: { date: toteuma }.
+   * Keskeytyspäivä drops the day. Kutsu on a day that also has a lisävuoro: the kutsu wins
+   * (same shift is not counted twice).
+   */
+  function lisatSummary(days, marks, extras, toteumat, holidayMap) {
+    const mins = { ilta: 0, yo: 0, la: 0, su: 0, aatto: 0 };
+    const fixed = {
+      poikkeama: { n: 0, eur: 0, rates: {} },
+      vapaa: { n: 0, eur: 0, rates: {} },
+      peruutus: { n: 0, eur: 0, rates: {} },
+    };
+    const events = [];
+    const notes = [];
+    function addMin(date, start, end) {
+      const m = lisaShiftMinutes(date, start, end, holidayMap);
+      LISA_KEYS.forEach(function (k) {
+        mins[k] += m[k];
+      });
+    }
+    function addFixed(key, date, why) {
+      const r = fixedRatesFor(date)[key];
+      fixed[key].n += 1;
+      fixed[key].eur = Math.round((fixed[key].eur + r) * 100) / 100;
+      fixed[key].rates[r.toFixed(2)] = true;
+      events.push({ date: date, key: key, eur: r, why: why });
+    }
+    function devWhy(dv) {
+      const bits = [];
+      if (dv.early) bits.push("alkoi suunniteltua aiemmin");
+      if (dv.lateMin >= LATE_END_MIN) bits.push("päättyi " + formatHM(dv.lateMin) + " myöhemmin");
+      return bits.join(", ");
+    }
+    (days || []).forEach(function (d) {
+      if (isKeskeytys(marks && marks[d.date])) return;
+      const t = normToteuma(toteumat && toteumat[d.date]);
+      const planned = d.start != null ? { start: d.start, end: d.end } : null;
+      if (planned) {
+        if (!t || t.type === "kutsu") {
+          addMin(d.date, planned.start, planned.end);
+        } else if (t.type === "muutos") {
+          addMin(d.date, t.start, t.end);
+          const dv = deviation(planned, t);
+          if (dv.hit && !t.oma) addFixed("poikkeama", d.date, devWhy(dv));
+        } else if (t.type === "korvattu") {
+          addMin(d.date, t.start, t.end);
+          const dv = deviation(planned, t);
+          if (dv.hit) addFixed("poikkeama", d.date, "peruttu, tilalle vuoro joka " + devWhy(dv));
+        } else if (t.type === "peruttu") {
+          if (t.late) addFixed("peruutus", d.date, "peruttu edellisenä päivänä klo 17 jälkeen");
+        }
+      } else if (t && t.type === "kutsu") {
+        const act = {
+          start: t.aStart != null ? t.aStart : t.start,
+          end: t.aEnd != null ? t.aEnd : t.end,
+        };
+        addMin(d.date, act.start, act.end);
+        addFixed("vapaa", d.date, "kutsuttu vapaapäivänä");
+        const dv = deviation(t, act);
+        if (dv.hit) addFixed("poikkeama", d.date, "kutsuvuoro " + devWhy(dv));
+      }
+      const ex = extras && extras[d.date];
+      if (ex && ex.start != null && ex.end != null) {
+        if (!planned && t && t.type === "kutsu") notes.push({ date: d.date, msg: "kutsu ja lisävuoro samalla päivällä – lisävuoroa ei laskettu lisiin kahteen kertaan" });
+        else addMin(d.date, ex.start, ex.end);
+      }
+    });
+    const hours = {};
+    LISA_KEYS.forEach(function (k) {
+      hours[k] = roundTes24(mins[k]);
+    });
+    const fixedTotal = Math.round((fixed.poikkeama.eur + fixed.vapaa.eur + fixed.peruutus.eur) * 100) / 100;
+    return { minutes: mins, hours: hours, fixed: fixed, fixedTotal: fixedTotal, events: events, notes: notes };
+  }
+
   /** Summaries for overview */
 
   function summarize(result) {
@@ -1483,5 +1679,15 @@
     weekdayFi,
     REST_NOT_ALLOWED_MIN,
     REST_MD_CHECK_MIN,
+    aattoName,
+    LISA_KEYS,
+    LISA_CODES,
+    FIXED_RATES,
+    fixedRatesFor,
+    lisaShiftMinutes,
+    roundTes24,
+    TOTEUMA_TYPES,
+    normToteuma,
+    lisatSummary,
   };
 });

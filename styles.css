@@ -375,3 +375,30 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .guide p, .guide li { color: var(--ink); font-size: 0.9rem; line-height: 1.45; margin: 4px 0; }
 .guide ul { margin: 4px 0; padding-left: 1.1rem; }
 .guide .pill { font-size: 0.72rem; }
+
+.tot-toggle {
+  border: 1px solid #d9c7a3; background: #fdf8ef; color: #7a5200;
+  border-radius: 999px; font-weight: 700; font-size: 0.72rem; padding: 3px 8px; cursor: pointer; margin-left: 4px;
+}
+.tot-toggle.on { background: #fcebc8; border-color: #e0b866; }
+.tot-line { background: #fdf3df; border: 1px solid #ecd3a0; border-radius: 10px; padding: 8px; margin-top: 8px; font-size: 0.85rem; line-height: 1.45; }
+.tag.tot { background: #f6dfae; color: #6b4700; }
+.day-card.has-tot { border-color: #ecd3a0; }
+.tot-editor { margin-top: 8px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+.tot-editor[hidden], .tot-editor label[hidden] { display: none; }
+.tot-editor label { display: flex; flex-direction: column; gap: 2px; font-size: 0.75rem; color: var(--muted); font-weight: 700; }
+.tot-editor .tot-wide { grid-column: 1 / -1; }
+.tot-editor input, .tot-editor select { font-size: 1rem; padding: 6px 8px; border: 1px solid var(--line); border-radius: 8px; background: #fff; width: 100%; min-width: 0; }
+.tot-editor .ot-actions { grid-column: 1 / -1; }
+.lisat-card { margin-top: 12px; }
+.lisat-card h3 { margin: 0 0 6px; color: var(--brand); }
+.lisat-table { width: 100%; border-collapse: collapse; font-size: 0.85rem; margin: 6px 0 4px; }
+.lisat-table th { text-align: left; font-size: 0.72rem; color: var(--muted); font-weight: 700; border-bottom: 1px solid var(--line); padding: 4px 4px; }
+.lisat-table td { padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.lisat-table td small { display: block; color: var(--muted); font-size: 0.7rem; line-height: 1.3; }
+.lisat-table th:not(:first-child), .lisat-table td:not(:first-child) { text-align: right; white-space: nowrap; }
+.lisat-table .lisat-pay { font-weight: 800; }
+.lisat-table .lisat-sum td { border-bottom: none; }
+.lisat-note { margin: 6px 0 4px; }
+.lisat-events { margin: 6px 0; padding-left: 1.1rem; font-size: 0.8rem; color: var(--ink); }
+.lisat-events.warn { color: var(--md-ink); }

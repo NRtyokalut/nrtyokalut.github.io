@@ -70,8 +70,17 @@
           <li><b>LM-ruutu</b>: luottamusmiehen +8 h jaksossa. Lisätään sekä LM- että Yritys-tunteihin, ja ruutu muistetaan nimen mukaan seuraavissa jaksoissa.</li>
           <li><b>Keskeytyspäivä</b>: sairaus tai loma, myös vapaapäivänä. Päivän tunnit poistuvat ja laskentapäivät vähenevät yhdellä.</li>
           <li><b>+ Lisävuoro</b>: anna alku- ja loppuaika. Lisävuoro lasketaan tunteihin ja ylitöihin.</li>
+          <li><b>Toteuma</b>: merkitse, jos vuoro alkoi tai päättyi eri aikaan kuin suunniteltiin, vuoro peruttiin tai sinut kutsuttiin töihin vapaapäivänä.</li>
         </ul>
-        <h3>5. Tietojen tallennus</h3>
+        <h3>5. Lisät (TES)</h3>
+        <p>Vuorotaulun alla oleva <b>Lisät (TES)</b> -kortti näyttää ilta-, yö-, lauantai-, sunnuntai- ja aattolisien tunnit. Tunnit lasketaan yhteen koko jaksolta ja pyöristetään TES:n §24 mukaan: alle 30 min alas, 30 min tai yli ylös. Kortissa on myös poikkeamakorvaukset, vapaa-ajan poikkeamakorvaukset ja peruutuskorvaukset euroina. Vertaa määriä ja palkkakoodeja palkkalaskelmaan.</p>
+        <ul>
+          <li>Vuoro alkoi suunniteltua aiemmin tai päättyi vähintään 30 min myöhemmin: 1 poikkeamakorvaus vuorolta. Omasta pyynnöstä tehty muutos ei oikeuta korvaukseen.</li>
+          <li>Kutsu vapaapäivänä: vapaa-ajan poikkeamakorvaus, ja lisäksi poikkeamakorvaus, jos vuoro venyi vähintään 30 min.</li>
+          <li>Vuoro peruttiin edellisenä päivänä klo 17 jälkeen eikä uutta vuoroa annettu: työvuoron peruutuskorvaus.</li>
+        </ul>
+        <p>Tuntilisien euromäärät tulevat myöhemmin.</p>
+        <h3>6. Tietojen tallennus</h3>
         <p>Kaikki merkinnät tallentuvat vain tähän puhelimeen, eikä niistä tehdä varmuuskopiota. Jos poistat sovelluksen Koti-valikosta tai tyhjennät Safarin tiedot, merkinnät häviävät.</p>
       </details>
 
@@ -134,6 +143,7 @@
         </table>
       </div>
       <div id="detailTotals" class="totals"></div>
+      <div id="detailLisat" class="card lisat-card"></div>
     </section>
   </main>
 

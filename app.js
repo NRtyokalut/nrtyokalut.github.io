@@ -152,6 +152,10 @@
       dayFlash = { id: p.id, date: date, msg: CONFLICT_MSG };
       return false;
     }
+    if (personTots(p)[date]) {
+      dayFlash = { id: p.id, date: date, msg: TOT_CONFLICT_MSG, tot: true };
+      return false;
+    }
     dayFlash = null;
     const map = loadMarkMap();
     const key = laskKey(p);
@@ -659,7 +663,7 @@
     const ex = personExtras(p)[date];
     const fig = ex ? ShiftCalc.computeShiftFigures(date, ex.start, ex.end, state.holidayMap) : null;
     const open = openExtra && openExtra.id === p.id && openExtra.date === date;
-    const flash = dayFlash && dayFlash.id === p.id && dayFlash.date === date ? dayFlash.msg : "";
+    const flash = dayFlash && !dayFlash.tot && dayFlash.id === p.id && dayFlash.date === date ? dayFlash.msg : "";
     const btn =
       '<button type="button" class="extra-toggle" data-date="' +
       date +
@@ -705,11 +709,217 @@
     return { btn: btn, body: block + editor, fig: fig };
   }
 
+  // --- Toteuma (actual times) + Lisät (TES) card ---
+  // { [personKey]: { [yyyy-mm-dd]: toteuma } } — see ShiftCalc.lisatSummary. On-device only.
+  const TOT_PREFIX = "nrtyokalut.toteuma.";
+  const TOT_CONFLICT_MSG = "Keskeytyspäivää ja toteumaa ei voi merkitä samalle päivälle.";
+  let openTot = null;
+  function loadTotMap() {
+    if (!state) return {};
+    try {
+      return JSON.parse(localStorage.getItem(TOT_PREFIX + state.startDate) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function personTots(p) {
+    return loadTotMap()[laskKey(p)] || {};
+  }
+  function saveTot(p, date, value) {
+    const map = loadTotMap();
+    const key = laskKey(p);
+    const cur = Object.assign({}, map[key] || {});
+    if (value) cur[date] = value;
+    else delete cur[date];
+    if (Object.keys(cur).length) map[key] = cur;
+    else delete map[key];
+    try {
+      const k = TOT_PREFIX + state.startDate;
+      if (!Object.keys(map).length) localStorage.removeItem(k);
+      else localStorage.setItem(k, JSON.stringify(map));
+    } catch (e) {}
+  }
+  function personLisat(p) {
+    return ShiftCalc.lisatSummary(p.days, personMarks(p), personExtras(p), personTots(p), state.holidayMap);
+  }
+  function eur(x) {
+    return x.toFixed(2).replace(".", ",") + " €";
+  }
+  const FIXED_LABEL = { poikkeama: "Poikkeamakorvaus", vapaa: "Vapaa-ajan poikkeamakorvaus", peruutus: "Työvuoron peruutuskorvaus" };
+
+  /** Editor choice ↔ stored toteuma */
+  function totChoice(t) {
+    if (!t) return "";
+    if (t.type === "muutos") return t.oma ? "oma" : "muutos";
+    if (t.type === "peruttu") return t.late ? "peruttu_late" : "peruttu_ok";
+    return t.type;
+  }
+  function totSummaryText(t) {
+    if (!t) return "";
+    if (t.type === "muutos") return "Toteutui " + fmt(t.start) + "–" + fmt(t.end) + (t.oma ? " (omasta pyynnöstä)" : "");
+    if (t.type === "korvattu") return "Peruttu, tilalle " + fmt(t.start) + "–" + fmt(t.end);
+    if (t.type === "peruttu") return t.late ? "Peruttu klo 17 jälkeen, ei uutta vuoroa" : "Peruttu ajoissa";
+    if (t.type === "kutsu") {
+      const a = t.aStart != null ? t.aStart : t.start;
+      const b = t.aEnd != null ? t.aEnd : t.end;
+      return "Kutsuttu vapaapäivänä " + fmt(t.start) + "–" + fmt(t.end) + (a !== t.start || b !== t.end ? " · toteutui " + fmt(a) + "–" + fmt(b) : "");
+    }
+    return "";
+  }
+
+  function totBits(p, d, lisat) {
+    const t = ShiftCalc.normToteuma(personTots(p)[d.date]);
+    const planned = d.start != null;
+    const open = openTot && openTot.id === p.id && openTot.date === d.date;
+    const flash = dayFlash && dayFlash.id === p.id && dayFlash.date === d.date && dayFlash.tot ? dayFlash.msg : "";
+    const btn =
+      '<button type="button" class="tot-toggle' + (t ? " on" : "") + '" data-date="' + d.date + '">' +
+      (t ? "Toteuma ✓" : "Toteuma") + "</button>";
+    let line = "";
+    if (t && !(t.type === "kutsu" && planned)) {
+      const ev = lisat.events.filter((e) => e.date === d.date);
+      line =
+        '<div class="tot-line"><span class="tag tot">Toteuma</span> ' + totSummaryText(t) +
+        (ev.length ? "<br/>" + ev.map((e) => "+ " + FIXED_LABEL[e.key] + " " + eur(e.eur)).join("<br/>") : "") +
+        "</div>";
+    }
+    const c = totChoice(t);
+    const opt = (v, label) => '<option value="' + v + '"' + (c === v ? " selected" : "") + ">" + label + "</option>";
+    const val = (x) => (x != null ? fmt(x) : "");
+    const timed = t && (t.type === "muutos" || t.type === "korvattu");
+    const editor =
+      '<div class="tot-editor"' + (open ? "" : " hidden") + ' data-date="' + d.date + '">' +
+      '<label class="tot-wide">Mitä tapahtui?<select class="tot-type">' +
+      (planned
+        ? opt("", "Toteutui suunnitellusti (" + fmt(d.start) + "–" + fmt(d.end) + ")") +
+          opt("muutos", "Aika muuttui (työnjohdon määräys)") +
+          opt("oma", "Aika muuttui omasta pyynnöstä") +
+          opt("korvattu", "Peruttu, tilalle toinen vuoro") +
+          opt("peruttu_late", "Peruttu klo 17 jälkeen edellisenä päivänä, ei uutta vuoroa") +
+          opt("peruttu_ok", "Peruttu ajoissa (ennen klo 17)")
+        : opt("", "Vapaapäivä") + opt("kutsu", "Kutsuttu vapaapäivänä")) +
+      "</select></label>" +
+      (planned
+        ? '<label data-for="muutos oma korvattu">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
+          '<label data-for="muutos oma korvattu">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>'
+        : '<label data-for="kutsu">Ilmoitettu alku <input class="tot-start" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.start) : "") + '" placeholder="8:00"></label>' +
+          '<label data-for="kutsu">Ilmoitettu loppu <input class="tot-end" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.end) : "") + '" placeholder="16:00"></label>' +
+          '<label data-for="kutsu">Toteutunut alku (jos eri) <input class="tot-astart" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.aStart) : "") + '"></label>' +
+          '<label data-for="kutsu">Toteutunut loppu (jos eri) <input class="tot-aend" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.aEnd) : "") + '"></label>') +
+      '<div class="ot-actions"><button type="button" class="ot-save tot-save" data-date="' + d.date + '">Tallenna</button>' +
+      (t ? '<button type="button" class="ot-reset tot-del" data-date="' + d.date + '">Poista</button>' : "") +
+      "</div>" +
+      (flash && open ? '<p class="extra-err">' + flash + "</p>" : "") +
+      "</div>" +
+      (flash && !open ? '<p class="extra-err">' + flash + "</p>" : "");
+    return { btn: btn, body: line + editor, t: t };
+  }
+
+  function syncTotEditor(box) {
+    const v = box.querySelector(".tot-type").value;
+    box.querySelectorAll("label[data-for]").forEach((l) => {
+      l.hidden = l.dataset.for.split(" ").indexOf(v) < 0;
+    });
+  }
+
+  function readTotEditor(box, d) {
+    const v = box.querySelector(".tot-type").value;
+    const get = (cls) => {
+      const el = box.querySelector(cls);
+      const s = el ? el.value.trim() : "";
+      return s === "" ? null : ShiftCalc.parseHM(s);
+    };
+    const bad = (cls) => {
+      const el = box.querySelector(cls);
+      return el && el.value.trim() !== "" && ShiftCalc.parseHM(el.value.trim()) == null;
+    };
+    if (v === "") return { value: null };
+    if (v === "peruttu_late" || v === "peruttu_ok") return { value: { type: "peruttu", late: v === "peruttu_late" } };
+    if ([".tot-start", ".tot-end", ".tot-astart", ".tot-aend"].some(bad)) return { err: "Anna ajat muodossa h:mm." };
+    const a = get(".tot-start");
+    const b = get(".tot-end");
+    if (a == null || b == null) return { err: v === "kutsu" ? "Anna ilmoitettu alku ja loppu." : "Anna toteutunut alku ja loppu." };
+    if (a === b) return { err: "Alku ja loppu eivät voi olla samat." };
+    if (v === "muutos" || v === "oma") {
+      if (a === d.start && b === d.end) return { value: null };
+      return { value: { type: "muutos", start: a, end: b, oma: v === "oma" } };
+    }
+    if (v === "korvattu") return { value: { type: "korvattu", start: a, end: b } };
+    const o = { type: "kutsu", start: a, end: b };
+    const as = get(".tot-astart");
+    const ae = get(".tot-aend");
+    if (as != null) o.aStart = as;
+    if (ae != null) o.aEnd = ae;
+    if ((as != null ? as : a) === (ae != null ? ae : b)) return { err: "Alku ja loppu eivät voi olla samat." };
+    return { value: o };
+  }
+
+  function renderLisat(p, lisat) {
+    const L = lisat;
+    const C = ShiftCalc.LISA_CODES;
+    const rows = [
+      ["ilta", "Iltatyölisä", "klo 18–21 · §17"],
+      ["yo", "Yötyölisä", "klo 21–06, jatko klo 12 asti jos alkanut viim. klo 4 · §18"],
+      ["la", "Lauantaityökorvaus", "arkilauantai klo 06–18 · §19"],
+      ["su", "Sunnuntaityökorvaus", "su ja pyhät klo 0–24 + edellinen päivä klo 18–24 · §20"],
+      ["aatto", "Aattopäivänlisä", "pääsiäislauantai, juhannus- ja jouluaatto klo 0–18 · §21"],
+    ];
+    const hourRows = rows
+      .map((r) =>
+        "<tr><td><b>" + r[1] + "</b><small>" + r[2] + "</small></td><td>" + (C[r[0]] || "–") + "</td><td>" +
+        fmt(L.minutes[r[0]]) + '</td><td class="lisat-pay">' + L.hours[r[0]] + " h</td></tr>"
+      )
+      .join("");
+    const rateText = (f) => {
+      const r = Object.keys(f.rates);
+      return r.length === 1 ? f.n + " × " + r[0].replace(".", ",") + " €" : f.n + " kpl";
+    };
+    const fixedRows = ["poikkeama", "vapaa", "peruutus"]
+      .map((k) => {
+        const f = L.fixed[k];
+        const unit = ShiftCalc.fixedRatesFor(state.startDate)[k];
+        return (
+          "<tr><td><b>" + FIXED_LABEL[k] + "</b><small>" + (f.n ? rateText(f) : eur(unit) + " / kpl") +
+          (k === "peruutus" ? " · §6" : " · §22") + "</small></td><td>" + C[k] + "</td><td>" + f.n + ' kpl</td><td class="lisat-pay">' +
+          eur(f.eur) + "</td></tr>"
+        );
+      })
+      .join("");
+    const evs = L.events.length
+      ? '<ul class="lisat-events">' +
+        L.events
+          .map((e) => {
+            const d = p.days.find((x) => x.date === e.date) || {};
+            return "<li>" + (WD_SHORT[d.weekday] || "") + " " + dateFi(e.date).slice(0, 6) + " · " + FIXED_LABEL[e.key] + " " + eur(e.eur) + " – " + e.why + "</li>";
+          })
+          .join("") +
+        "</ul>"
+      : "";
+    const notes = L.notes.length
+      ? '<ul class="lisat-events warn">' + L.notes.map((n) => "<li>" + dateFi(n.date).slice(0, 6) + " · " + n.msg + "</li>").join("") + "</ul>"
+      : "";
+    $("detailLisat").innerHTML =
+      "<h3>Lisät (TES)</h3>" +
+      '<p class="ot-meta">Vertaa palkkalaskelman määriin. Tunnit lasketaan yhteen koko jaksolta ja pyöristetään kerran (§24): alle 30 min alas, 30 min tai yli ylös. Toteuma-merkinnät korvaavat suunnitellun ajan.</p>' +
+      '<table class="lisat-table"><thead><tr><th>Tuntilisä</th><th>Koodi</th><th>Tehty</th><th>Maksetaan</th></tr></thead><tbody>' +
+      hourRows +
+      "</tbody></table>" +
+      '<p class="ot-meta lisat-note">Tuntilisien euromäärät lisätään, kun tuntipalkka ja täydennysosa on vahvistettu.</p>' +
+      '<table class="lisat-table"><thead><tr><th>Korvaus</th><th>Koodi</th><th>Määrä</th><th>€</th></tr></thead><tbody>' +
+      fixedRows +
+      '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(L.fixedTotal) + "</td></tr>" +
+      "</tbody></table>" +
+      evs +
+      notes +
+      '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuma vaikuttaa vain tähän korttiin: kovat tunnit, LM ja ylityöt lasketaan vuorolistasta ja lisävuoroista. Jos kutsuvuoro kuuluu myös ylitöihin, lisää se lisäksi lisävuorona – lisiin sitä ei lasketa kahdesti.</p>';
+  }
+
   function openDetail(personId) {
     const p = state.people.find((x) => x.id === personId);
     if (!p) return;
     $("detailTitle").textContent = p.name + " · " + p.shiftCount + " vuoroa";
     const rests = personRest(p);
+    const lisat = personLisat(p);
 
     // Desktop/wide: classic table; mobile: compact day cards (see CSS)
     const tbody = $("detailTable").querySelector("tbody");
@@ -728,9 +938,11 @@
           (sick ? "Keskeytyspäivä ✓" : "Keskeytyspäivä") +
           "</button> " +
           extraBits(p, d.date).btn +
+          totBits(p, d, lisat).btn +
           " " +
           dateFi(d.date).slice(0, 5) +
           extraBits(p, d.date).body +
+          totBits(p, d, lisat).body +
           "</td>" +
           "<td>" +
           (WD_SHORT[d.weekday] || "") +
@@ -773,11 +985,13 @@
             (rd.restAfterMin != null ? " · " + fmt(rd.restAfterMin) : "")
           : "";
         const extra = extraBits(p, d.date);
+        const tot = totBits(p, d, lisat);
         return (
           '<article class="day-card' +
           (hasShift ? "" : " empty") +
           (extra.fig ? " has-extra" : "") +
           (sick ? " sick" : "") +
+          (tot.t ? " has-tot" : "") +
           '">' +
           '<header><strong>' +
           (WD_SHORT[d.weekday] || "") +
@@ -793,6 +1007,7 @@
           (sick ? "Keskeytyspäivä ✓" : "Keskeytyspäivä") +
           "</button>" +
           extra.btn +
+          tot.btn +
           "</header>" +
           (hasShift
             ? '<div class="day-grid' +
@@ -835,6 +1050,7 @@
               ? ""
               : '<p class="muted">Ei vuoroa</p>') +
           extra.body +
+          tot.body +
           "</article>"
         );
       })
@@ -971,6 +1187,58 @@
         deleteExtra(p, btn.dataset.date);
         dayFlash = null;
         openExtra = null;
+        redraw();
+      });
+    });
+
+    renderLisat(p, lisat);
+    document.querySelectorAll("#view-detail .tot-editor").forEach((box) => {
+      syncTotEditor(box);
+      box.querySelector(".tot-type").addEventListener("change", () => syncTotEditor(box));
+    });
+    document.querySelectorAll("#view-detail .tot-toggle").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const date = btn.dataset.date;
+        if (isSickDay(p, { date: date })) {
+          dayFlash = { id: p.id, date: date, msg: TOT_CONFLICT_MSG, tot: true };
+          openTot = { id: p.id, date: date };
+          redraw();
+          return;
+        }
+        dayFlash = null;
+        if (openTot && openTot.id === p.id && openTot.date === date) openTot = null;
+        else openTot = { id: p.id, date: date };
+        redraw();
+      });
+    });
+    document.querySelectorAll("#view-detail .tot-save").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const date = btn.dataset.date;
+        const d = p.days.find((x) => x.date === date);
+        const box = btn.closest(".tot-editor");
+        openTot = { id: p.id, date: date };
+        if (isSickDay(p, { date: date })) {
+          dayFlash = { id: p.id, date: date, msg: TOT_CONFLICT_MSG, tot: true };
+          redraw();
+          return;
+        }
+        const r = readTotEditor(box, d);
+        if (r.err) {
+          dayFlash = { id: p.id, date: date, msg: r.err, tot: true };
+          redraw();
+          return;
+        }
+        saveTot(p, date, r.value);
+        dayFlash = null;
+        openTot = null;
+        redraw();
+      });
+    });
+    document.querySelectorAll("#view-detail .tot-del").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        saveTot(p, btn.dataset.date, null);
+        dayFlash = null;
+        openTot = null;
         redraw();
       });
     });
