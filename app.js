@@ -1186,7 +1186,17 @@
     saveDayList(ERPV_PREFIX, p, date, ShiftCalc.normErpv(v));
   }
   function personErpv(p) {
-    return ShiftCalc.erpvSummary(p.days, personMarks(p), personExtras(p), personTots(p), personErpvDays(p));
+    const E = ShiftCalc.erpvSummary(p.days, personMarks(p), personExtras(p), personTots(p), personErpvDays(p));
+    // LM-tunnit are always erityistehtävä (1308): the LM +8:00 per jakso (0 if whole jakso keskeytyksellä),
+    // priced at the rate valid on the jakso end date. Still counted in Tunnit yhteensä as before.
+    const m = isSteward(p) ? stewardMinutes(p) : 0;
+    if (m) {
+      const end = state.dates && state.dates.length ? state.dates[state.dates.length - 1] : state.startDate;
+      const rate = ShiftCalc.eritRateFor(end);
+      E.lm = { min: m, rate: rate, eur: Math.round((m / 60) * rate * 100) / 100 };
+      E.eur = Math.round((E.eur + E.lm.eur) * 100) / 100;
+    }
+    return E;
   }
   const PV_LABEL = { koko: "Kokopäiväraha", osa: "Osapäiväraha" };
   function personKpl(p) {
@@ -1515,6 +1525,7 @@
     const multi = (list) => list.length > 1;
     const etList = E.et.rows.length ? E.et.rows : [{ rate: ShiftCalc.eritRateFor(state.startDate), min: 0, hours: 0, eur: 0, from: state.startDate }];
     etList.forEach((g) => rows.push(["Erityistehtävälisä", rateFi(g.rate) + " €/h" + (multi(etList) ? " · " + dateFi(g.from).slice(0, 6) + " alk." : ""), ShiftCalc.ERIT_CODE, fmt(g.min) + " → " + numFi(Math.round(g.hours * 100) / 100) + " h", eur(g.eur)]));
+    if (E.lm) rows.push(["LM-tunnit (erityistehtävä)", fmt(E.lm.min) + " × " + rateFi(E.lm.rate) + " €/h", ShiftCalc.ERIT_CODE, fmt(E.lm.min) + " h", eur(E.lm.eur)]);
     ["koko", "osa"].forEach((k) => {
       const b = E.pv[k];
       const list = b.rows.length ? b.rows : [{ rate: ShiftCalc.paivarahaRatesFor(state.startDate)[k], n: 0, eur: 0, from: state.startDate }];
