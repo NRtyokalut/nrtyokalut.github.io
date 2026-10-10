@@ -252,6 +252,25 @@
       else localStorage.setItem(key, JSON.stringify(next));
     } catch (e) {}
   }
+  // TSV (työsuojeluvaltuutettu): remembered by name like LM, but adds NO hours; palkkio only.
+  function loadTsvMap() {
+    try {
+      return JSON.parse(localStorage.getItem(ShiftCalc.TSV_STORAGE_KEY) || "{}") || {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function isTsv(p) {
+    return !!loadTsvMap()[p.name];
+  }
+  function setTsv(p, on) {
+    const next = ShiftCalc.stewardMapSet(loadTsvMap(), p.name, on);
+    try {
+      const key = ShiftCalc.TSV_STORAGE_KEY;
+      if (!Object.keys(next).length) localStorage.removeItem(key);
+      else localStorage.setItem(key, JSON.stringify(next));
+    } catch (e) {}
+  }
   function stewardLabel() {
     const m = ShiftCalc.stewardBonus(true);
     const h = m % 60 === 0 ? String(m / 60) : ShiftCalc.formatHM(m);
@@ -900,6 +919,29 @@
     return { value: o };
   }
 
+  function palkkioHtml(p) {
+    const lm = isSteward(p);
+    const tsv = isTsv(p);
+    if (!lm && !tsv) return "";
+    const endKey = state.dates && state.dates.length ? state.dates[state.dates.length - 1] : state.startDate;
+    const rates = ShiftCalc.palkkioRatesInRange(state.startDate, endKey);
+    const rateTxt = rates
+      .map((r, i) => eur(r.eur) + "/kk" + (i ? " " + dateFi(r.from).slice(0, 6) + " alkaen" : ""))
+      .join(", ");
+    const row = (name, code, small) =>
+      "<tr><td><b>" + name + "</b><small>" + small + '</small></td><td>–</td><td></td><td class="lisat-pay">' + rateTxt + "</td></tr>";
+    return (
+      '<table class="lisat-table palkkio-table"><thead><tr><th>Palkkiot (€/kk)</th><th>Koodi</th><th></th><th>€/kk</th></tr></thead><tbody>' +
+      (lm ? row("Luottamusmiespalkkio", "", "§18.17 · maksetaan 10 kk/vuosi (varamiehelle 2 kk)") : "") +
+      (tsv ? row("Työsuojeluvaltuutetun palkkio", "", "§21 · maksetaan 12 kk/vuosi (varahenkilölle 2 kk: huhti- ja lokakuu) · ei lisätunteja") : "") +
+      "</tbody></table>" +
+      '<p class="ot-meta lisat-note">Palkkiot ovat kuukausikohtaisia, eivät jaksokohtaisia: jakso ja kalenterikuukausi eivät osu yhteen, joten vertaa niitä kuukauden palkkalaskelmaan.</p>' +
+      (lm && tsv
+        ? '<p class="palkkio-warn">Huom: TES §21:n mukaan luottamusmiespalkkiota ja työsuojeluvaltuutetun palkkiota ei makseta samalle henkilölle samanaikaisesti. Jos olet esimerkiksi LM ja vara-TSV, TSV-palkkio maksetaan vain niiltä kuukausilta, joina toimit TSV:n sijaisena.</p>'
+        : "")
+    );
+  }
+
   function renderLisat(p, lisat) {
     const L = lisat;
     const C = ShiftCalc.LISA_CODES;
@@ -957,6 +999,7 @@
       "</tbody></table>" +
       evs +
       notes +
+      palkkioHtml(p) +
       '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, LM:n ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
   }
 
@@ -1160,6 +1203,12 @@
     $("lmCheck").onchange = () => {
       setSteward(p, $("lmCheck").checked);
       paintTotals();
+      renderLisat(p, personLisat(p));
+    };
+    $("tsvCheck").checked = isTsv(p);
+    $("tsvCheck").onchange = () => {
+      setTsv(p, $("tsvCheck").checked);
+      renderLisat(p, personLisat(p));
     };
     $("laskentaInput").oninput = () => {
       const v = parseInt($("laskentaInput").value, 10);

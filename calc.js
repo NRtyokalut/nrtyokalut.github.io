@@ -386,6 +386,32 @@
     return next;
   }
 
+  /**
+   * Erillinen palkkio €/kk (not per jakso): luottamusmies §18.17 and työsuojeluvaltuutettu §21
+   * have the same amounts. TSV gets no extra hours. TES §21: not paid to the same person at
+   * the same time.
+   */
+  const PALKKIO_RATES = [
+    { from: "0000-00-00", eur: 161 },
+    { from: "2026-09-01", eur: 165 },
+    { from: "2027-08-01", eur: 169 },
+  ];
+  function palkkioFor(key) {
+    let r = PALKKIO_RATES[0];
+    PALKKIO_RATES.forEach(function (x) {
+      if (key >= x.from) r = x;
+    });
+    return r.eur;
+  }
+  /** Distinct monthly rates over a jakso [startKey, endKey] (a jakso can cross a rate change). */
+  function palkkioRatesInRange(startKey, endKey) {
+    const out = [{ from: startKey, eur: palkkioFor(startKey) }];
+    PALKKIO_RATES.forEach(function (x) {
+      if (x.from > startKey && x.from <= endKey) out.push({ from: x.from, eur: x.eur });
+    });
+    return out;
+  }
+
   function overtimeThresholds(start, dayCount, config) {
     const cfg = config || OT_CONFIG;
     const s = toDate(start);
@@ -1705,6 +1731,10 @@
     easterSunday,
     OT_CONFIG,
     STEWARD_STORAGE_KEY: "nrtyokalut.lm",
+    TSV_STORAGE_KEY: "nrtyokalut.tsv",
+    PALKKIO_RATES,
+    palkkioFor,
+    palkkioRatesInRange,
     stewardBonus,
     stewardMapSet,
     overtimeHolidaysForYear,

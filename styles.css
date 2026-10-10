@@ -410,3 +410,6 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .tot-choice label small { display: block; font-weight: 400; color: var(--muted); font-size: 0.75rem; margin-left: 1.5rem; }
 .tot-choice input { width: auto; margin-right: 6px; }
 .tot-hint { margin: 6px 0 0; font-size: 0.78rem; color: #6b4700; font-weight: 700; }
+.palkkio-table td:nth-child(3), .palkkio-table th:nth-child(3) { padding: 0; }
+.palkkio-table .lisat-pay { white-space: normal; }
+.palkkio-warn { margin: 6px 0; padding: 8px; border-radius: 10px; background: var(--md); color: var(--md-ink); font-size: 0.8rem; line-height: 1.4; }

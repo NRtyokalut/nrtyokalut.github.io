@@ -68,6 +68,7 @@
         <ul>
           <li><b>Laskentapäivät</b> (oletus 21): keskeytyneen jakson ylityörajat lasketaan tämän mukaan.</li>
           <li><b>LM-ruutu</b>: luottamusmiehen +8 h jaksossa. Lisätään sekä LM- että Yritys-tunteihin, ja ruutu muistetaan nimen mukaan seuraavissa jaksoissa.</li>
+          <li><b>TSV-ruutu</b>: työsuojeluvaltuutettu. Ei lisää tunteja, mutta Lisät (TES) -kortissa näkyy TSV-palkkio (165 €/kk 1.9.2026 alkaen). Myös ruksattu LM näyttää luottamusmiespalkkion. Palkkiot ovat kuukausikohtaisia, eivät jaksokohtaisia. TES §21: LM- ja TSV-palkkiota ei makseta samalle henkilölle samanaikaisesti. Ruutu muistetaan nimen mukaan.</li>
           <li><b>Keskeytyspäivä</b>: sairaus tai loma, myös vapaapäivänä. Päivän tunnit poistuvat ja laskentapäivät vähenevät yhdellä.</li>
           <li><b>+ Lisävuoro</b>: anna alku- ja loppuaika. Lisävuoro lasketaan tunteihin ja ylitöihin.</li>
           <li><b>Toteuma</b>: merkitse, jos vuoro alkoi tai päättyi eri aikaan kuin suunniteltiin, vuoro peruttiin tai sinut kutsuttiin töihin vapaapäivänä. Toteuman tunnit lasketaan kovien tuntien, LM:n ja ylitöiden yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsuvuoro kokonaan, joten sitä ei tarvitse lisätä lisävuorona. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Lisävuoroa, joka on päällekkäin saman päivän vuoron kanssa, ei lasketa, joten samoja tunteja ei lasketa kahdesti.</li>
@@ -125,6 +126,10 @@
       <label class="lm-check">
         <input type="checkbox" id="lmCheck" />
         <span id="lmCheckLabel">LM</span>
+      </label>
+      <label class="lm-check">
+        <input type="checkbox" id="tsvCheck" />
+        <span id="tsvCheckLabel">TSV (palkkio, ei lisätunteja)</span>
       </label>
       </div>
       <p class="scroll-hint" id="detailScrollHint">← Pyyhkäise sivuttain nähdäksesi kaikki sarakkeet →</p>
