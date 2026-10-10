@@ -322,6 +322,22 @@
   }
 
   // --- Overview ---
+  /** Which block (group) of a multi-group sheet is in use; other groups are ignored. */
+  function renderGroupNote() {
+    const el = $("groupNote");
+    if (!el) return;
+    const others = (state.groups || []).filter((g) => g.title !== state.group);
+    if (!state.group && !state.groupNotice) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.className = "group-note" + (state.groupNotice ? " warn" : "");
+    el.textContent = state.groupNotice
+      ? state.groupNotice
+      : "Ryhmä: " + state.group + (others.length ? " · muut ryhmät ohitettu (" + others.map((g) => g.title).join(", ") + ")" : "");
+  }
+
   function renderOverview(keepScroll) {
     const people = state.people;
     state.otEffective = effectiveOt();
@@ -366,6 +382,7 @@
     if (nMd) bits.push(nMd + " TARKISTA");
     if (nOk) bits.push(nOk + " OK");
     $("overviewSummary").textContent = people.reduce((a, p) => a + p.shiftCount, 0) + " vuoroa · " + bits.join(" · ");
+    renderGroupNote();
     const y = window.scrollY;
     show("overview");
     if (keepScroll) window.scrollTo(0, y);
@@ -569,7 +586,7 @@
         return m;
       });
       info = {
-        text: (state.periodLabel ? state.periodLabel + " · " : "") + "Jakso " + dateFi(state.startDate) + " – " + dateFi(state.dates[state.dates.length - 1]) + " · " + rows.length + " kuljettajaa" +
+        text: (state.group ? state.group + " · " : "") + (state.periodLabel ? state.periodLabel + " · " : "") + "Jakso " + dateFi(state.startDate) + " – " + dateFi(state.dates[state.dates.length - 1]) + " · " + rows.length + " kuljettajaa" +
           (state.published ? "" : " · luonnos: ei lasketa vuoteen"),
       };
     }
@@ -788,6 +805,7 @@
       periodLabel: state.periodLabel || "",
       dayCount: state.dayCount,
       status: status,
+      group: state.group || null,
       savedAt: new Date().toISOString(),
       people: people,
     };

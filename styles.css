@@ -449,6 +449,10 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .ajo-toggle input:checked + span { background: #1f5a1f; color: #fff; }
 .ajo-toggle input:focus-visible + span { outline: 2px solid #0B3D5C; outline-offset: -2px; }
 .juna-flags { align-items: center; }
+/* Group (block) in use on multi-group sheets */
+.group-note { margin: 2px 0 8px; font-size: 0.82rem; color: var(--muted); }
+.group-note.warn { color: #8a5a00; background: #fff1d6; border: 1px solid #f0c978; border-radius: 8px; padding: 6px 9px; }
+
 /* --- Lataa PDF: print view --- */
 .pdf-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 4px; }
 .pdf-btn { font: inherit; font-weight: 700; font-size: 0.95rem; padding: 9px 16px; border-radius: 10px; border: 1px solid var(--brand); background: var(--brand); color: #fff; cursor: pointer; }

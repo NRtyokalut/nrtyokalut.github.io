@@ -540,6 +540,22 @@
     return '<p class="card-break">Keskeytynyt · ' + n + " pv</p>";
   }
 
+  /** Which block (group) of a multi-group sheet is in use; other groups are ignored. */
+  function renderGroupNote() {
+    const el = $("groupNote");
+    if (!el) return;
+    const others = (state.groups || []).filter((g) => g.title !== state.group);
+    if (!state.group && !state.groupNotice) {
+      el.hidden = true;
+      return;
+    }
+    el.hidden = false;
+    el.className = "group-note" + (state.groupNotice ? " warn" : "");
+    el.textContent = state.groupNotice
+      ? state.groupNotice
+      : "Ryhmä: " + state.group + (others.length ? " · muut ryhmät ohitettu (" + others.map((g) => g.title).join(", ") + ")" : "");
+  }
+
   function renderOverview(keepScroll) {
     const people = state.people;
     state.otEffective = effectiveOt();
@@ -651,6 +667,7 @@
       people.reduce((a, p) => a + p.shiftCount, 0) +
       " vuoroa · " +
       bits.join(" · ");
+    renderGroupNote();
 
     if (keepScroll) {
       const y = window.scrollY;
@@ -1364,7 +1381,7 @@
     if (isTsv(p)) pk.push(["Työsuojeluvaltuutetun palkkio", rates, "12 kk/vuosi (varahenkilölle 2 kk)"]);
     const flags = [isSteward(p) ? "LM (+8 h)" : "", isTsv(p) ? "TSV" : ""].filter(Boolean).join(" · ");
     const html =
-      '<header class="pv-head"><h1>Jakso päiväkirja</h1><p><b>' + escHtml(p.name) + "</b> · " + (state.periodLabel ? escHtml(state.periodLabel) + " · " : "") + jaksoRange() +
+      '<header class="pv-head"><h1>Jakso päiväkirja</h1><p><b>' + escHtml(p.name) + "</b> · " + (state.group ? escHtml(state.group) + " · " : "") + (state.periodLabel ? escHtml(state.periodLabel) + " · " : "") + jaksoRange() +
       (flags ? " · " + flags : "") + "</p><p class=\"pv-meta\">Tulostettu " + dateFi(new Date().toISOString().slice(0, 10)) + "</p></header>" +
       "<h2>Päivät</h2>" +
       pvTable(["Päivä", "Suunniteltu", "Toteuma", "Tunnit yht.", "Kovat", "Ilta", "Yö", "La", "Su", "Aatto", "Kesk."], dayRows, "pv-days") +

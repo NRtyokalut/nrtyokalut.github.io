@@ -51,6 +51,7 @@
         <summary>Käyttöohjeet</summary>
         <h3>1. Avaa jakso</h3>
         <p>Paina <b>Valitse .xlsx-tiedosto</b> ja valitse jakso-lomake. Sovellus etsii jakson alkupäivän ”Jakso”-solun alta. Jos sitä ei löydy, sovellus pyytää antamaan päivän itse.</p>
+        <p>Jos samassa taulukossa on useita ryhmiä (esim. VEK ja VTJ), sovellus käyttää vain ryhmää, jonka otsikossa on <b>VEK</b>. Muut ryhmät ohitetaan kokonaan. Käytetty ryhmä näkyy etusivulla.</p>
         <h3>2. Etusivu</h3>
         <p>Jokaisella henkilöllä on oma kortti:</p>
         <ul>
@@ -101,6 +102,7 @@
       </div>
       <h2 class="section-title" id="overviewTitle">Kaikki henkilöt</h2>
       <p id="overviewSummary" class="overview-summary"></p>
+      <p id="groupNote" class="group-note" hidden></p>
       <p id="otMeta" class="ot-meta"></p>
       <div id="personCards" class="person-cards"></div>
       <p class="legend">

@@ -951,7 +951,30 @@
   }
 
   /**
+   * Pick the one block (group) to use from all "Jakso N" blocks found on the sheet.
+   * Today: the drivers' block, i.e. the title containing "VEK"; otherwise the first block (with a notice
+   * when there were several). FUTURE: a group switcher only needs to pass opts.group = <title> to
+   * parseArrayBuffer/parseJaksoForm (titles are in result.groups); this function already honours it.
+   * Remember to keep history/kaksinajo per group if that is ever added.
+   */
+  function selectGroup(blocks, wanted) {
+    if (!blocks || !blocks.length) return { block: null, notice: null };
+    if (wanted != null) {
+      const w = blocks.find(function (b) { return b.title === wanted; });
+      if (w) return { block: w, notice: null };
+    }
+    const vek = blocks.find(function (b) { return /\bVEK\b/i.test(b.title || ""); });
+    if (vek) return { block: vek, notice: null };
+    return {
+      block: blocks[0],
+      notice: blocks.length > 1 ? "Taulukossa on " + blocks.length + " ryhmää, eikä yhdenkään otsikossa ole VEK. Käytetään ensimmäistä: " + blocks[0].title + "." : null,
+    };
+  }
+
+  /**
    * Parse company Jakso form sheet (Taul1 / first sheet) into structured data.
+   * Every "Jakso N" block is detected (side by side or stacked); result.groups lists them all, and only
+   * the block chosen by selectGroup() is parsed into people.
    * Accepts a SheetJS workbook or a 2D array sheet.
    */
   function parseJaksoForm(workbook, opts) {
@@ -1167,12 +1190,89 @@
       return found;
     }
 
-    let jakso = null;
-    forEachValue(MAX_SCAN_ROW, 40, function (r, c, v) {
-      if (jakso || typeof v !== "string") return;
-      const m = v.match(/^\s*jakso\s*(\d+)/i);
-      if (m) jakso = { row: r + 1, col: c, label: String(v).trim(), number: +m[1] };
+    // --- Blocks: every "Jakso N" header cell starts one block (a group: drivers, shunters, …).
+    // Blocks may sit side by side or stacked; each has its own date column under its anchor.
+    const anchors = [];
+    forEachValue(400, 120, function (r, c, v) {
+      if (typeof v !== "string") return;
+      const m = v.match(/^\s*jakso\s*(\d+)\s*$/i);
+      if (m) anchors.push({ row: r + 1, col: c, label: String(v).trim(), number: +m[1] });
     });
+    const sheetMax0 = sheetMaxCol0();
+    function isBlankName(v) {
+      return v == null || String(v).trim() === "";
+    }
+    /** Last column of a block: before the next anchor on the same band (±3 rows) to the right,
+     *  otherwise after the last named column followed by a gap of 2+ empty name cells. */
+    function blockEndCol(a) {
+      let end = Math.min(sheetMax0, a.col + 46);
+      anchors.forEach(function (b) {
+        if (b !== a && b.col > a.col && Math.abs(b.row - a.row) <= 3 && b.col - 1 < end) end = b.col - 1;
+      });
+      let lastNamed = a.col, gap = 0;
+      for (let c = a.col + 1; c <= end; c++) {
+        if (isBlankName(raw(colLetter(c) + a.row))) {
+          gap++;
+          if (gap >= 2 && lastNamed > a.col) return lastNamed;
+        } else {
+          gap = 0;
+          lastNamed = c;
+        }
+      }
+      return end;
+    }
+    /** Group title: nearest non-empty text cell above the anchor within the block's columns. */
+    function blockTitle(a, endCol) {
+      for (let r = a.row - 1; r >= Math.max(1, a.row - 8); r--) {
+        let stop = false, found = null;
+        for (let c = a.col; c <= endCol; c++) {
+          const v = raw(colLetter(c) + r);
+          if (v == null || typeof v !== "string") continue;
+          const t = v.trim();
+          if (!t) continue;
+          if (isTunnitText(t) || /^\s*jakso\s*\d+/i.test(t)) { stop = true; break; }
+          if (isWeekdayText(t) || parseDateValue(t)) continue;
+          if (!found) found = t;
+        }
+        if (found) return found;
+        if (stop) return null;
+      }
+      return null;
+    }
+    const blocks = anchors.map(function (a, i) {
+      const end = blockEndCol(a);
+      let named = 0;
+      for (let c = a.col + 1; c <= end; c++) {
+        const n = raw(colLetter(c) + a.row);
+        if (!isBlankName(n) && !/^jakso\b/i.test(String(n).trim())) named++;
+      }
+      return { index: i, anchor: a, endCol: end, title: blockTitle(a, end), named: named };
+    });
+    const usable = blocks.filter(function (b) { return b.named > 0; });
+    usable.forEach(function (b, i) {
+      if (!b.title) b.title = "Ryhmä " + (i + 1);
+    });
+    // Duplicate titles get a suffix so each group key stays unique.
+    const seenT = {};
+    usable.forEach(function (b) {
+      const t = b.title;
+      seenT[t] = (seenT[t] || 0) + 1;
+      if (seenT[t] > 1) b.title = t + " (" + seenT[t] + ")";
+    });
+    // Only ONE block is used (see selectGroup); all other blocks are ignored everywhere.
+    const sel = selectGroup(usable, opts.group);
+    const chosen = sel.block;
+    const groupNotice = sel.notice;
+    let jakso = chosen ? chosen.anchor : null;
+    let blockEnd = chosen ? chosen.endCol : null;
+    if (!jakso) {
+      // Fallback: the old rule (first "Jakso…" text, even with extra words after the number).
+      forEachValue(MAX_SCAN_ROW, 40, function (r, c, v) {
+        if (jakso || typeof v !== "string") return;
+        const m = v.match(/^\s*jakso\s*(\d+)/i);
+        if (m) jakso = { row: r + 1, col: c, label: String(v).trim(), number: +m[1] };
+      });
+    }
 
     let nameRow = null, weekRow0 = null, dateRow0 = null, hoursRow0 = null;
     let stride = 3, metaCol = 1, startDate = null, periodLabel = "";
@@ -1244,7 +1344,7 @@
 
     if (!startDate || dateRow0 == null || nameRow == null) {
       if (jakso || findWeekdayRun()) {
-        return { needsStartDate: true, periodLabel: periodLabel, periodNumber: jakso ? jakso.number : null };
+        return { needsStartDate: true, periodLabel: periodLabel, periodNumber: jakso ? jakso.number : null, group: chosen && chosen.title.indexOf("Ryhmä ") !== 0 ? chosen.title : null, groupNotice: groupNotice };
       }
       throw new Error("Jakso-lomaketta ei voitu lukea (ei jaksoa eikä päiviä).");
     }
@@ -1297,7 +1397,7 @@
       return true;
     }
 
-    const maxCol0 = Math.min(sheetMaxCol0(), metaCol + 1 + 45);
+    const maxCol0 = blockEnd != null && jakso && metaCol === jakso.col ? blockEnd : Math.min(sheetMax0, metaCol + 1 + 45);
     const personCols = [];
     for (let c = metaCol + 1; c <= maxCol0; c++) {
       const letter = colLetter(c);
@@ -1359,7 +1459,14 @@
       startDate: dateKey(startDate),
       dates: dates.map(dateKey),
       dayCount: dayCount,
-      layout: { nameRow: nameRow, weekRow0: weekRow0, dateRow0: dateRow0, hoursRow0: hoursRow0, stride: stride, metaCol: metaCol },
+      layout: { nameRow: nameRow, weekRow0: weekRow0, dateRow0: dateRow0, hoursRow0: hoursRow0, stride: stride, metaCol: metaCol, endCol: maxCol0 },
+      // Group (block) info. group is null on plain single-block sheets without a title above.
+      group: chosen && chosen.title.indexOf("Ryhmä ") !== 0 ? chosen.title : null,
+      groupNotice: groupNotice,
+      groups: usable.map(function (b) {
+        return { title: b.title, cell: colLetter(b.anchor.col) + b.anchor.row, people: b.named };
+      }),
+      skippedBlocks: blocks.filter(function (b) { return b.named === 0; }).map(function (b) { return colLetter(b.anchor.col) + b.anchor.row + (b.title ? " " + b.title : ""); }),
       people,
       holidayMap,
       overtime: otThresholds,
@@ -1979,6 +2086,7 @@
     parseShift,
     parseCompanyHours,
     parseJaksoForm,
+    selectGroup,
     parseArrayBuffer,
     computePerson,
     computeShiftFigures,

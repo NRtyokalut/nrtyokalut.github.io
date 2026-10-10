@@ -1,5 +1,5 @@
 // Vuorotaulun tarkastus — own service worker, scope ./ (= /tarkastus/). Separate from the root app.
-const CACHE = "tarkastus-v2";
+const CACHE = "tarkastus-v3";
 const ASSETS = [
   "./",
   "./index.html",
