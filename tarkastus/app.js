@@ -128,12 +128,12 @@
   function setSteward(p, on) {
     setJSON(STEWARD_KEY, ShiftCalc.stewardMapSet(getJSON(STEWARD_KEY, {}), p.name, on));
   }
-  function stewardN(p) {
-    const days = ShiftCalc.OT_CONFIG.periodDays;
-    return state.dayCount === days ? personN(p) : days;
+  /** Every day of the jakso is keskeytys (e.g. full loma) → LM +0:00. */
+  function wholeKeskeytys(p) {
+    return state.dayCount > 0 && sickCount(p) >= state.dayCount;
   }
   function stewardMinutes(p) {
-    return ShiftCalc.stewardBonus(isSteward(p), null, stewardN(p));
+    return ShiftCalc.stewardBonus(isSteward(p), null, wholeKeskeytys(p));
   }
   function activeLm(p) {
     return sumPerson(p, "me") + stewardMinutes(p);
@@ -146,8 +146,7 @@
     return "LM (+" + (m % 60 === 0 ? String(m / 60) : fmt(m)) + " h / jakso)";
   }
   function stewardLine(p) {
-    const n = stewardN(p);
-    return "LM-tunnit +" + fmt(ShiftCalc.stewardBonus(true, null, n)) + " (" + n + "/" + ShiftCalc.OT_CONFIG.periodDays + " pv)";
+    return wholeKeskeytys(p) ? "LM-tunnit +0:00 (koko jakso keskeytyksellä)" : "LM-tunnit +" + fmt(ShiftCalc.stewardBonus(true));
   }
   function personOt(p) {
     if (!state.otEffective) return null;

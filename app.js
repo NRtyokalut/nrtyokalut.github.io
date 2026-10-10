@@ -221,12 +221,12 @@
   function sumPerson(p, key, tots) {
     return ShiftCalc.sumActive(p.days, personMarks(p), key, personExtras(p), state.holidayMap, tots || personTots(p));
   }
-  function stewardN(p) {
-    const days = ShiftCalc.OT_CONFIG.periodDays;
-    return state.dayCount === days ? personN(p) : days;
+  /** Every day of the jakso is keskeytys (e.g. full loma) → LM +0:00. */
+  function wholeKeskeytys(p) {
+    return state.dayCount > 0 && sickCount(p) >= state.dayCount;
   }
   function stewardMinutes(p) {
-    return ShiftCalc.stewardBonus(isSteward(p), null, stewardN(p));
+    return ShiftCalc.stewardBonus(isSteward(p), null, wholeKeskeytys(p));
   }
   function activeLm(p, tots) {
     return sumPerson(p, "me", tots) + stewardMinutes(p);
@@ -277,10 +277,7 @@
     return "LM (+" + h + " h / jakso)";
   }
   function stewardLine(p) {
-    const days = ShiftCalc.OT_CONFIG.periodDays;
-    const n = stewardN(p);
-    const mins = ShiftCalc.stewardBonus(true, null, n);
-    return "LM-tunnit +" + fmt(mins) + " (" + n + "/" + days + " pv)";
+    return wholeKeskeytys(p) ? "LM-tunnit +0:00 (koko jakso keskeytyksellä)" : "LM-tunnit +" + fmt(ShiftCalc.stewardBonus(true));
   }
   function personOt(p, tots) {
     if (!state.otEffective) return null;
@@ -965,6 +962,9 @@
   // All on-device only.
   const JUNA_PREFIX = "nrtyokalut.junat.";
   const AUTOAJO_PREFIX = "nrtyokalut.autoajo.";
+  // Kappalemääräiset lisät (päivystysraha, kaksinkertainen, kaluston tarkastuspalkkio), own key:
+  // { [personKey]: { [yyyy-mm-dd]: { pr, pr2, kal } } }. The user enters the final counts; no auto-logic.
+  const LISAT_PREFIX = "nrtyokalut.lisat.";
   let openJuna = null;
   let junaUid = 0;
   function escHtml(s) {
@@ -982,7 +982,7 @@
     const map = loadDayListMap(prefix);
     const key = laskKey(p);
     const cur = Object.assign({}, map[key] || {});
-    if (list && list.length) cur[date] = list;
+    if (list && (Array.isArray(list) ? list.length : true)) cur[date] = list;
     else delete cur[date];
     if (Object.keys(cur).length) map[key] = cur;
     else delete map[key];
@@ -1003,6 +1003,15 @@
   }
   function saveAutoajot(p, date, list) {
     saveDayList(AUTOAJO_PREFIX, p, date, list);
+  }
+  function personKplDays(p) {
+    return loadDayListMap(LISAT_PREFIX)[laskKey(p)] || {};
+  }
+  function saveKpl(p, date, v) {
+    saveDayList(LISAT_PREFIX, p, date, ShiftCalc.normKpl(v));
+  }
+  function personKpl(p) {
+    return ShiftCalc.kplSummary(personKplDays(p), (date) => isSickDay(p, { date: date }));
   }
   function pairInfo(p, date) {
     return ShiftCalc.pairPartners(state.people, p, date);
@@ -1077,16 +1086,18 @@
     const info = pairInfo(p, d.date);
     const list = (personJunat(p)[d.date] || []).map(ShiftCalc.normJuna).filter(Boolean);
     const autos = (personAutoajot(p)[d.date] || []).map(ShiftCalc.normAutoajo).filter(Boolean);
-    const n = list.length + autos.length;
+    const kpl = ShiftCalc.normKpl(personKplDays(p)[d.date]);
+    const n = list.length + autos.length + (kpl ? 1 : 0);
     const open = openJuna && openJuna.id === p.id && openJuna.date === d.date;
     const btn =
       '<button type="button" class="juna-toggle' + (n ? " on" : "") + '" data-date="' + d.date + '">' +
-      (n ? "Ajot ✓ " + n : "+ Juna") + "</button>";
+      (n ? "Ajot ✓ " + n : "+ Juna / lisät") + "</button>";
     let line = "";
     if (n) {
       const counted = vr.trains.filter((t) => t.date === d.date);
       const cAuto = aa.trips.filter((t) => t.date === d.date);
-      const dayEur = counted.reduce((s, t) => s + t.eur, 0) + cAuto.reduce((s, t) => s + t.eur, 0);
+      const kDay = personKpl(p).days.find((x) => x.date === d.date);
+      const dayEur = counted.reduce((s, t) => s + t.eur, 0) + cAuto.reduce((s, t) => s + t.eur, 0) + (kDay ? kDay.eur : 0);
       line =
         '<div class="juna-line"><span class="tag juna">Ajot</span> ' +
         list
@@ -1113,7 +1124,16 @@
             );
           })
           .join("") +
-        (counted.length + cAuto.length > 1 ? "<br/>Päivä yhteensä <b>" + eur(dayEur) + "</b>" : "") +
+        (kpl
+          ? "<br/>Lisät: " +
+            ShiftCalc.KPL_KEYS.filter((k) => kpl[k])
+              .map((k) => {
+                const it = kDay && kDay.items.find((x) => x.key === k);
+                return ShiftCalc.KPL_LABELS[k].toLowerCase() + " " + kpl[k] + (it ? " × " + rateFi(it.rate) + " = <b>" + eur(it.eur) + "</b>" : " → ei lasketa");
+              })
+              .join(" · ")
+          : "") +
+        (counted.length + cAuto.length + (kDay ? 1 : 0) > 1 ? "<br/>Päivä yhteensä <b>" + eur(dayEur) + "</b>" : "") +
         "</div>";
     }
     const editor =
@@ -1125,6 +1145,14 @@
       '<h4 class="auto-head">Autolla-ajo <small>(vain auton kuljettaja, miehistönvaihto)</small></h4>' +
       '<div class="auto-rows">' + autos.map(autoRowHtml).join("") + "</div>" +
       '<button type="button" class="a-add">+ Lisää autolla-ajo</button>' +
+      '<h4 class="auto-head">Lisät (kpl) <small>(syötä lopullinen määrä)</small></h4>' +
+      '<div class="juna-row kpl-row">' +
+      ShiftCalc.KPL_KEYS.map(
+        (k) =>
+          '<label>' + ShiftCalc.KPL_LABELS[k] + ' <input class="k-' + k + '" type="number" min="0" step="1" inputmode="numeric" value="' + (kpl && kpl[k] ? kpl[k] : "") + '" placeholder="0"></label>'
+      ).join("") +
+      "</div>" +
+      '<p class="tot-help">Ratapihavuoron ulkopuolella yksi päivystysraha tehtävää kohden; saman tunnin tehtävistä vain yksi.</p>' +
       '<div class="ot-actions"><button type="button" class="ot-save j-save" data-date="' + d.date + '">Tallenna</button>' +
       (n ? '<button type="button" class="ot-reset j-del" data-date="' + d.date + '">Poista kaikki</button>' : "") +
       "</div>" +
@@ -1168,7 +1196,16 @@
       if (Number.isNaN(km)) return { err: "Autolla-ajo " + (i + 1) + ": anna km numerona." };
       autos.push({ tyyppi: arows[i].querySelector(".a-type").value === "ulko" ? "ulko" : "paikallis", km: km });
     }
-    return { value: out, autos: autos };
+    const kpl = {};
+    for (const k of ShiftCalc.KPL_KEYS) {
+      const el = box.querySelector(".k-" + k);
+      const t = el ? el.value.trim() : "";
+      if (t === "") continue;
+      const v = Number(t.replace(",", "."));
+      if (!isFinite(v) || v < 0 || Math.floor(v) !== v) return { err: ShiftCalc.KPL_LABELS[k] + ": anna kokonaisluku (kpl)." };
+      if (v > 0) kpl[k] = v;
+    }
+    return { value: out, autos: autos, kpl: kpl };
   }
   const WD_JS = ["Su", "Ma", "Ti", "Ke", "To", "Pe", "La"];
   function dayLabel(iso) {
@@ -1245,6 +1282,23 @@
     );
   }
 
+  function kplHtml(k) {
+    if (!k.rows.length && !k.notes.length) return "";
+    return (
+      '<table class="lisat-table kpl-codes"><thead><tr><th>Päivystysrahat ja tarkastuspalkkiot</th><th>Koodi</th><th>Kpl</th><th>€</th></tr></thead><tbody>' +
+      k.rows
+        .map(
+          (r) =>
+            "<tr><td><b>" + r.label + "</b><small>" + eur(r.rate) + " / kpl" + (k.rows.filter((x) => x.key === r.key).length > 1 ? " · " + dateFi(r.from).slice(0, 6) + " alk." : "") +
+            "</small></td><td>" + r.code + "</td><td>" + r.n + '</td><td class="lisat-pay">' + eur(r.eur) + "</td></tr>"
+        )
+        .join("") +
+      '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(k.eur) + "</td></tr>" +
+      "</tbody></table>" +
+      notesHtml(k.notes) +
+      '<p class="ot-meta lisat-note">Määrät syötetään päivän <b>+ Juna / lisät</b>-napista. Hinta päivän mukaan (1.9.2026 alkaen uudet, 1.8.2027 alkaen 2027 hinnat).</p>'
+    );
+  }
   function renderLisat(p, lisat) {
     const L = lisat;
     const C = ShiftCalc.LISA_CODES;
@@ -1302,6 +1356,7 @@
       "</tbody></table>" +
       evs +
       notes +
+      kplHtml(personKpl(p)) +
       '<div class="vr-block">' + veturirahaHtml(personVeturiraha(p)) + autoajoHtml(personAutoajo(p)) + "</div>" +
       palkkioHtml(p) +
       '<p class="ot-meta lisat-note">Merkitse muutokset päivän <b>Toteuma</b>-napista. Toteuman tunnit lasketaan myös kovien tuntien, Tunnit yhteensä -luvun ja ylitöiden (lisätyö, 50 %, 100 %) yhteismääriin: muuttunut vuoro toteutuneen ajan mukaan ja kutsu vapaapäivänä kokonaan, ilman erillistä lisävuoroa. Ajoissa peruttu vuoro pitää suunnitellut tunnit. Klo 17 jälkeen perutusta vuorosta valitset joko tunnit tai peruutuskorvauksen, et molempia. Lisävuoroa, joka on päällekkäin saman päivän toteutuneen vuoron kanssa, ei lasketa.</p>';
@@ -1341,6 +1396,7 @@
     const L = personLisat(p);
     const vr = personVeturiraha(p);
     const aa = personAutoajo(p);
+    const kp = personKpl(p);
     const ot = personOt(p);
     const fm = (m) => (m ? fmt(m) : "");
     const dayRows = p.days.map((d) => {
@@ -1391,6 +1447,13 @@
       "<h2>Lisät (TES)</h2>" +
       pvTable(["Tuntilisä", "Koodi", "Tehty", "Maksetaan"], lisaRows) +
       pvTable(["Korvaus", "Koodi", "Määrä", "€"], fixedRows.concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(L.fixedTotal)] }])) +
+      (kp.rows.length
+        ? pvTable(["Päivystysrahat ja tarkastuspalkkiot", "Koodi", "Kpl", "€"], kp.rows.map((r) => [r.label + " <small>" + eur(r.rate) + " / kpl" + (kp.rows.filter((x) => x.key === r.key).length > 1 ? " · " + dateFi(r.from).slice(0, 6) + " alk." : "") + "</small>", r.code, r.n, eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Yhteensä</b>", "", "", eur(kp.eur)] }])) +
+          pvTable(["Päivä", "Päivystysraha", "Kaksinkertainen", "Tarkastus", "€"], kp.days.map((d) => {
+            const n = (k) => { const it = d.items.find((x) => x.key === k); return it ? it.n : ""; };
+            return [dayLabel(d.date), n("pr"), n("pr2"), n("kal"), eur(d.eur)];
+          }))
+        : "") +
       (vr.rows.length
         ? pvTable(["Veturiraha palkkalajeittain", "Koodi", "Km", "€"], vr.rows.map((r) => [r.label + " <small>" + String(r.rate).replace(".", ",") + " €/km</small>", r.code, numFi(r.km), eur(r.eur)]).concat([{ cls: "pv-sum", cells: ["<b>Veturiraha yhteensä</b>", "", numFi(vr.km), eur(vr.eur)] }]))
         : "") +
@@ -1794,6 +1857,7 @@
         }
         saveJunat(p, date, r.value);
         saveAutoajot(p, date, r.autos);
+        saveKpl(p, date, r.kpl);
         dayFlash = null;
         openJuna = null;
         redraw();
@@ -1803,6 +1867,7 @@
         del.addEventListener("click", () => {
           saveJunat(p, box.dataset.date, null);
           saveAutoajot(p, box.dataset.date, null);
+          saveKpl(p, box.dataset.date, null);
           dayFlash = null;
           openJuna = null;
           redraw();

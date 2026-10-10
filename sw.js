@@ -1,4 +1,4 @@
-const CACHE = "pekantyokalut-v57";
+const CACHE = "pekantyokalut-v58";
 // The checker app lives at ./tarkastus/ with its own service worker and caches ("tarkastus-*").
 const SUBAPP = new URL("./tarkastus/", self.registration.scope).href;
 const ASSETS = [

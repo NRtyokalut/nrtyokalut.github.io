@@ -67,7 +67,7 @@
         <p>Avaa vuorotaulu painamalla henkilön korttia.</p>
         <ul>
           <li><b>Laskentapäivät</b> (oletus 21): keskeytyneen jakson ylityörajat lasketaan tämän mukaan.</li>
-          <li><b>LM-ruutu</b>: luottamusmiehen +8 h jaksossa. Lisätään Tunnit yhteensä -lukuun, ja ruutu muistetaan nimen mukaan seuraavissa jaksoissa.</li>
+          <li><b>LM-ruutu</b>: luottamusmiehen +8 h jaksossa, aina täysi +8:00 myös keskeytyspäivien kanssa (vain koko jakson keskeytys, esim. loma koko jakson, antaa +0:00). Lisätään Tunnit yhteensä -lukuun, ja ruutu muistetaan nimen mukaan seuraavissa jaksoissa.</li>
           <li><b>TSV-ruutu</b>: työsuojeluvaltuutettu. Ei lisää tunteja, mutta Lisät (TES) -kortissa näkyy TSV-palkkio (165 €/kk 1.9.2026 alkaen). Myös ruksattu LM näyttää luottamusmiespalkkion. Palkkiot ovat kuukausikohtaisia, eivät jaksokohtaisia. TES §21: LM- ja TSV-palkkiota ei makseta samalle henkilölle samanaikaisesti. Ruutu muistetaan nimen mukaan.</li>
           <li><b>Keskeytyspäivä</b>: sairaus tai loma, myös vapaapäivänä. Päivän tunnit poistuvat ja laskentapäivät vähenevät yhdellä.</li>
           <li><b>+ Lisävuoro</b>: anna alku- ja loppuaika. Lisävuoro lasketaan tunteihin ja ylitöihin.</li>
@@ -83,9 +83,10 @@
         <p><b>+ Juna</b> (päivän kortissa): lisää päivän junat: junanumero, todellinen paino (t) ja km (lähtö- ja tulopaikan välinen matka). Yksinajo päätellään vuorotaulusta: jos jollakulla muulla on samana päivänä täsmälleen sama suunniteltu vuoro (sama alku ja loppu), juna on kaksinajo, muuten yksinajo. Valinta näkyy junarivillä kytkimenä <b>Yksinajo | Kaksinajo</b>. Sitä voi muuttaa käsin, ja käsin tehty valinta pysyy. Merkitse myös hidas juna (enint. 40 km/h) ja IVY-VAK. Veturiraha = km × TES:n hinta junapainon mukaan (enint. 1500 t, 1501–4800 t, yli 4800 t). Lisät (TES) -kortissa näkyvät ensin kaikki junat ja ajot päivämäärän mukaan (yksin- tai kaksinajo, koodi, km, €) ja sen alla yhteenveto palkkalajeittain kuten palkkalaskelmassa (1450–1463) sekä veturiraha yhteensä.</p>
         <p><b>Veturina ajo</b> (ruksi junarivillä): veturi ilman junaa. Anna vain km. Maksetaan henkilöjunan hinnalla (0,0592 €/km, yksinajo 0,1189 €/km 1.9.2026 alkaen, koodit 1456/1463). Yksin- tai kaksinajo päätellään samoin kuin junissa.</p>
         <p><b>Autolla-ajo</b> (samassa ikkunassa): vain kun itse ajoit työnantajan autoa miehistönvaihdossa. Paikallisajo 0,6912 €/km. Paikkakunnan ulkopuolinen ajo 0,0857 €/km, vähintään 30 km jokaiselta yhdensuuntaiselta ajolta, joten merkitse meno ja paluu omina riveinään. Palkkalaji ei tiedossa.</p>
+        <p><b>Lisät (kpl)</b> (samassa ikkunassa): päivystysraha (1301, 5,76 €), kaksinkertainen päivystysraha (1304, 11,52 €) ja kaluston tarkastuspalkkio (1310, 8,91 €) kappaleina; hinnat 1.9.2026 alkaen, päivän mukaan. Ratapihavuoron ulkopuolella yksi päivystysraha tehtävää kohden ja saman tunnin tehtävistä vain yksi. Syötä lopullinen määrä itse. Yhteismäärät näkyvät Lisät (TES) -kortissa ja PDF:ssä.</p>
         <p>Tuntilisien euromäärät tulevat myöhemmin.</p>
         <h3>6. Lataa PDF</h3>
-        <p>Henkilön vuorotaulun alla on <b>Lataa PDF</b>. Se avaa tulostuksen: valitse <b>Tallenna PDF:nä</b> (iPhone: Jaa → Tallenna tiedostoihin). PDF:ssä ovat päivät, toteumat, junat, autolla-ajot, Lisät (TES) palkkalajeittain, ylityöt ja palkkiot. Toimii myös ilman verkkoa.</p>
+        <p>Henkilön vuorotaulun alla on <b>Lataa PDF</b>. Se avaa tulostuksen: valitse <b>Tallenna PDF:nä</b> (iPhone: Jaa → Tallenna tiedostoihin). PDF:ssä ovat päivät, toteumat, junat, autolla-ajot, päivystysrahat, Lisät (TES) palkkalajeittain, ylityöt ja palkkiot. Toimii myös ilman verkkoa.</p>
         <h3>7. Tietojen tallennus</h3>
         <p>Kaikki merkinnät tallentuvat vain tähän puhelimeen, eikä niistä tehdä varmuuskopiota. Jos poistat sovelluksen Koti-valikosta tai tyhjennät Safarin tiedot, merkinnät häviävät.</p>
       </details>

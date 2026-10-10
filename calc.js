@@ -360,17 +360,15 @@
    *   lisaK = lisätyö starts, yliK = ylityö 50 % starts, sataK = ylityö 100 % starts.
    */
   /**
-   * Luottamusmies hours for one jakso. Full stewardMin at n = periodDays.
-   * Scales with laskentapäivät: round(stewardMin * n / 21). n omitted = full amount.
-   * Same minutes are added to LM and to Yritys.
+   * Luottamusmies hours for one jakso: ALWAYS the full stewardMin (+8:00), also with keskeytyspäivät
+   * (no proration by laskentapäivät). Only a whole-jakso keskeytys (e.g. loma for the entire jakso) gives 0.
+   * Same minutes are added to Tunnit yhteensä (LM) and to Yritys. Overtime limits still shrink separately.
    */
-  function stewardBonus(on, config, n) {
+  function stewardBonus(on, config, wholeJaksoKeskeytys) {
     if (!on) return 0;
+    if (wholeJaksoKeskeytys === true) return 0;
     const cfg = config || OT_CONFIG;
-    const full = cfg.stewardMin || 0;
-    const days = cfg.periodDays || 21;
-    if (n == null) return full;
-    return Math.round((full * n) / days);
+    return cfg.stewardMin || 0;
   }
 
   /**
@@ -1979,6 +1977,81 @@
   }
 
   /**
+   * Kappalemääräiset lisät, jotka käyttäjä syöttää itse päivittäin (TES Lisäpalkkiot):
+   * päivystysraha 1301, kaksinkertainen päivystysraha 1304, kaluston tarkastuspalkkio 1310.
+   * Ei automaattista logiikkaa: ratapihavuoron ulkopuolella yksi päivystysraha tehtävää kohden ja saman tunnin
+   * tehtävistä vain yksi, mutta käyttäjä syöttää lopullisen kappalemäärän. Hinta päivän mukaan.
+   */
+  const KPL_KEYS = ["pr", "pr2", "kal"];
+  const KPL_LABELS = { pr: "Päivystysraha", pr2: "Päivystysraha kaksinkertainen", kal: "Kaluston tarkastuspalkkio" };
+  const KPL_CODES = { pr: "1301", pr2: "1304", kal: "1310" };
+  const KPL_RATES = [
+    { from: "0000-00-00", pr: 5.6, pr2: 11.2, kal: 8.66 },
+    { from: "2026-09-01", pr: 5.76, pr2: 11.52, kal: 8.91 },
+    { from: "2027-08-01", pr: 5.9, pr2: 11.8, kal: 9.12 },
+  ];
+  function kplRatesFor(key) {
+    let r = KPL_RATES[0];
+    KPL_RATES.forEach(function (x) {
+      if (key >= x.from) r = x;
+    });
+    return r;
+  }
+  /** Normalise one day's entry { pr, pr2, kal } → whole non-negative numbers, or null if all zero. */
+  function normKpl(v) {
+    if (!v || typeof v !== "object") return null;
+    const o = {};
+    let any = false;
+    KPL_KEYS.forEach(function (k) {
+      const n = Math.floor(Number(v[k]));
+      if (isFinite(n) && n > 0) {
+        o[k] = n;
+        any = true;
+      }
+    });
+    return any ? o : null;
+  }
+  /** days: { [date]: { pr, pr2, kal } }. Rows per item and rate (old/new price split by date). */
+  function kplSummary(days, skip) {
+    const groups = {};
+    const notes = [];
+    const perDay = [];
+    Object.keys(days || {})
+      .sort()
+      .forEach(function (date) {
+        const v = normKpl(days[date]);
+        if (!v) return;
+        if (skip && skip(date)) {
+          notes.push({ date: date, msg: "Päivystysrahat/tarkastuspalkkiot: keskeytyspäivä, ei lasketa." });
+          return;
+        }
+        const rates = kplRatesFor(date);
+        const day = { date: date, items: [], eur: 0 };
+        KPL_KEYS.forEach(function (k) {
+          if (!v[k]) return;
+          const gk = k + "@" + rates[k];
+          if (!groups[gk]) groups[gk] = { key: k, label: KPL_LABELS[k], code: KPL_CODES[k], rate: rates[k], n: 0, from: date };
+          groups[gk].n += v[k];
+          const e = round2(v[k] * rates[k]);
+          day.items.push({ key: k, n: v[k], rate: rates[k], eur: e });
+          day.eur = round2(day.eur + e);
+        });
+        perDay.push(day);
+      });
+    const rows = Object.keys(groups)
+      .map(function (k) {
+        const g = groups[k];
+        g.eur = round2(g.n * g.rate);
+        return g;
+      })
+      .sort(function (a, b) {
+        const ia = KPL_KEYS.indexOf(a.key), ib = KPL_KEYS.indexOf(b.key);
+        return ia !== ib ? ia - ib : a.from < b.from ? -1 : 1;
+      });
+    return { rows: rows, days: perDay, eur: round2(rows.reduce(function (s, r) { return s + r.eur; }, 0)), notes: notes };
+  }
+
+  /**
    * Yksin- vai kaksinajo vuorotaulusta (Pekan työpaikan käytäntö, ei TES-sääntö): jos jollakin muulla
    * lomakkeen henkilöllä on samana päivänä täsmälleen sama suunniteltu vuoro (sama alku- ja loppuaika
    * minuutilleen), juna on ajettu kahdestaan; muuten yksin. Käytetään suunniteltua vuoroa (d.start/d.end),
@@ -2148,5 +2221,11 @@
     AUTOAJO_MIN_KM,
     normAutoajo,
     autoajoSummary,
+    KPL_KEYS,
+    KPL_LABELS,
+    KPL_CODES,
+    kplRatesFor,
+    normKpl,
+    kplSummary,
   };
 });
