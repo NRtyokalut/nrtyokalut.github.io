@@ -1091,7 +1091,7 @@
     const open = openJuna && openJuna.id === p.id && openJuna.date === d.date;
     const btn =
       '<button type="button" class="juna-toggle' + (n ? " on" : "") + '" data-date="' + d.date + '">' +
-      (n ? "Ajot ✓ " + n : "+ Juna / lisät") + "</button>";
+      (n ? "Lisät ✓ " + n : "+ Lisät") + "</button>";
     let line = "";
     if (n) {
       const counted = vr.trains.filter((t) => t.date === d.date);
@@ -1296,7 +1296,7 @@
       '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(k.eur) + "</td></tr>" +
       "</tbody></table>" +
       notesHtml(k.notes) +
-      '<p class="ot-meta lisat-note">Määrät syötetään päivän <b>+ Juna / lisät</b>-napista. Hinta päivän mukaan (1.9.2026 ja 1.8.2027 alkaen uudet hinnat).</p>'
+      '<p class="ot-meta lisat-note">Määrät syötetään päivän <b>+ Lisät</b>-napista. Hinta päivän mukaan (1.9.2026 ja 1.8.2027 alkaen uudet hinnat).</p>'
     );
   }
   function renderLisat(p, lisat) {
