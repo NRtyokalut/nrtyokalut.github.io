@@ -1499,7 +1499,7 @@
       '<tr class="lisat-sum"><td colspan="3"><b>Yhteensä</b></td><td class="lisat-pay">' + eur(E.eur) + "</td></tr>" +
       "</tbody></table>" +
       notesHtml(E.notes) +
-      '<p class="ot-meta lisat-note">Päiväraha lasketaan automaattisesti tehdyn vuoron alusta loppuun (poikkeamat huomioiden): kokopäiväraha vähintään 12 h, osapäiväraha yli 8 h tai yli 6 h, jos yli 3 h osuu klo 16–07 (TES Lisälehti 4, 9 §). Yksi päiväraha päivässä. Erityistehtävän tunnit lasketaan yhteen koko jaksolta ja pyöristetään kerran (§24). Eurot Verohallinnon mukaan (2026: 54 € / 25 €). Erityistehtävä ja päivärahan käsinvalinta päivän <b>+ Lisät</b>-napista.</p>'
+      '<p class="ot-meta lisat-note">Päiväraha lasketaan automaattisesti tehdyn vuoron alusta loppuun (poikkeamat huomioiden): kokopäiväraha vähintään 12 h, osapäiväraha vähintään 8 h tai vähintään 6 h, jos vähintään 3 h osuu klo 16–07 (TES Lisälehti 4, 9 §). Yksi päiväraha päivässä. Erityistehtävän tunnit lasketaan yhteen koko jaksolta ja pyöristetään kerran (§24). Eurot Verohallinnon mukaan (2026: 54 € / 25 €). Erityistehtävä ja päivärahan käsinvalinta päivän <b>+ Lisät</b>-napista.</p>'
     );
   }
   function kplHtml(k) {

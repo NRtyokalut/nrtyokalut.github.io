@@ -2215,7 +2215,7 @@
     { from: "0000-00-00", koko: 53, osa: 24 },
     { from: "2026-01-01", koko: 54, osa: 25 },
   ];
-  /** Lisälehti 4, 9 §: osa yli 8 h, tai yli 6 h jos yli 3 h klo 16–07; koko yli 12 h (Pekka: 12 h riittää → ≥ 12 h). */
+  /** Lisälehti 4, 9 § (TES: "yli"); Pekka: rajat sisältyvät → osa ≥ 8 h, tai ≥ 6 h jos ≥ 3 h klo 16–07; koko ≥ 12 h. Kellotunnit alusta loppuun. */
   const PAIVARAHA_RULES = { kokoMin: 12 * 60, osaMin: 8 * 60, osaIltaMin: 6 * 60, iltaMin: 3 * 60 };
   function byDateRate(list, key) {
     let r = list[0];
@@ -2261,7 +2261,7 @@
     for (let k = -1; k <= 2; k++) ilta += ov(sp.s, sp.e, k * 1440 + 16 * H, (k + 1) * 1440 + 7 * H);
     const R = PAIVARAHA_RULES;
     if (len >= R.kokoMin) return "koko";
-    if (len > R.osaMin || (len > R.osaIltaMin && ilta > R.iltaMin)) return "osa";
+    if (len >= R.osaMin || (len >= R.osaIltaMin && ilta >= R.iltaMin)) return "osa";
     return null;
   }
   /**
