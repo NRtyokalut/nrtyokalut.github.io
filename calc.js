@@ -1879,7 +1879,8 @@
 
   /**
    * Toteuma per day (on-device). Stored value:
-   *   { type: "muutos", start, end, oma }   planned shift ran at other times (oma = own request)
+   *   { type: "muutos", start, end, oma, syy? }   planned shift ran at other times (oma = own request;
+ *                                       syy "myohastyminen" = junan myöhästyminen, same rules as työnjohdon määräys)
    *   { type: "peruttu", late, korvaus }   cancelled, no new shift (late = notice after 17:00 the day before;
    *                                       korvaus = peruutuskorvaus chosen instead of the planned hours)
    *   { type: "korvattu", start, end }     cancelled and another shift given instead: hours, LM and each
@@ -1952,7 +1953,7 @@
         } else if (t.type === "muutos") {
           addMin(d.date, t.start, t.end);
           const dv = deviation(planned, t);
-          if (dv.hit && !t.oma) addFixed("poikkeama", d.date, devWhy(dv));
+          if (dv.hit && !t.oma) addFixed("poikkeama", d.date, (t.syy === "myohastyminen" ? "junan myöhästyminen: " : "") + devWhy(dv));
         } else if (t.type === "korvattu") {
           // each lisä type = MAX(planned shift's minutes, new shift's minutes)
           const mp = lisaShiftMinutes(d.date, planned.start, planned.end, holidayMap);

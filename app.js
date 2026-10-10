@@ -937,13 +937,13 @@
   /** Editor choice ↔ stored toteuma */
   function totChoice(t) {
     if (!t) return "";
-    if (t.type === "muutos") return t.oma ? "oma" : "muutos";
+    if (t.type === "muutos") return t.oma ? "oma" : t.syy === "myohastyminen" ? "myohastyminen" : "muutos";
     if (t.type === "peruttu") return t.late ? "peruttu_late" : "peruttu_ok";
     return t.type;
   }
   function totSummaryText(t) {
     if (!t) return "";
-    if (t.type === "muutos") return "Toteutui " + fmt(t.start) + "–" + fmt(t.end) + (t.oma ? " (omasta pyynnöstä)" : "");
+    if (t.type === "muutos") return (t.syy === "myohastyminen" ? "Junan myöhästyminen, toteutui " : "Toteutui ") + fmt(t.start) + "–" + fmt(t.end) + (t.oma ? " (omasta pyynnöstä)" : "");
     if (t.type === "korvattu") return "Peruttu, tilalle " + fmt(t.start) + "–" + fmt(t.end);
     if (t.type === "vaihto") return "Vaihdettu vuoro työkaverin kanssa, ajettu " + fmt(t.start) + "–" + fmt(t.end);
     if (t.type === "peruttu")
@@ -993,6 +993,7 @@
       (planned
         ? opt("", "Ei poikkeamaa, suunnitellusti (" + fmt(d.start) + "–" + fmt(d.end) + ")") +
           opt("muutos", "Aika muuttui (työnjohdon määräys)") +
+          opt("myohastyminen", "Junan myöhästyminen") +
           opt("oma", "Oman vuoron aika muuttui omasta pyynnöstä") +
           opt("vaihto", "Vaihdettu vuoro (työkaverin kanssa)") +
           opt("korvattu", "Peruttu, tilalle annettiin toinen vuoro") +
@@ -1006,8 +1007,8 @@
           '<p class="tot-help" data-for="vaihto">Ajoit työkaverin vuoron (pidemmän tai lyhyemmän) ja hän ajoi sinun. Anna ajetun vuoron alku ja loppu. Kovat tunnit, Yö h ja Tunnit yhteensä lasketaan oman suunnitellun vuorosi mukaan (' + fmt(d.start) + "–" + fmt(d.end) + ', tunnit yhteensä ' + fmt(d.me) + '), joten vaihto ei lisää eikä vähennä ylitöitä (Lisälehti 11). Ilta-, yö-, la-, su- ja aattolisät lasketaan ajetun vuoron mukaan. Ei poikkeama- eikä vapaa-ajan korvausta.</p>'
         : '<p class="tot-help" data-for="">Vaihtoa vapaapäivälle ei voi merkitä. Merkitse vaihto sille päivälle, jolla oma vuorosi oli.</p>') +
       (planned
-        ? '<label data-for="muutos oma korvattu vaihto">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
-          '<label data-for="muutos oma korvattu vaihto">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>' +
+        ? '<label data-for="muutos myohastyminen oma korvattu vaihto">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
+          '<label data-for="muutos myohastyminen oma korvattu vaihto">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>' +
           peruutusChoice(p, d, t)
         : '<label data-for="kutsu">Ilmoitettu alku <input class="tot-start" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.start) : "") + '" placeholder="8:00"></label>' +
           '<label data-for="kutsu">Ilmoitettu loppu <input class="tot-end" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.end) : "") + '" placeholder="16:00"></label>' +
@@ -1080,9 +1081,11 @@
     const b = get(".tot-end");
     if (a == null || b == null) return { err: v === "kutsu" ? "Anna ilmoitettu alku ja loppu." : "Anna toteutunut alku ja loppu." };
     if (a === b) return { err: "Alku ja loppu eivät voi olla samat." };
-    if (v === "muutos" || v === "oma") {
+    if (v === "muutos" || v === "oma" || v === "myohastyminen") {
       if (a === d.start && b === d.end) return { value: null };
-      return { value: { type: "muutos", start: a, end: b, oma: v === "oma" } };
+      const o = { type: "muutos", start: a, end: b, oma: v === "oma" };
+      if (v === "myohastyminen") o.syy = "myohastyminen";
+      return { value: o };
     }
     if (v === "korvattu") return { value: { type: "korvattu", start: a, end: b } };
     if (v === "vaihto") return { value: { type: "vaihto", start: a, end: b } };
