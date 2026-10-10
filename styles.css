@@ -413,3 +413,5 @@ table.grid td.struck { text-decoration: line-through; color: #8d7a84; }
 .palkkio-table td:nth-child(3), .palkkio-table th:nth-child(3) { padding: 0; }
 .palkkio-table .lisat-pay { white-space: normal; }
 .palkkio-warn { margin: 6px 0; padding: 8px; border-radius: 10px; background: var(--md); color: var(--md-ink); font-size: 0.8rem; line-height: 1.4; }
+.tot-help { grid-column: 1 / -1; margin: 0; font-size: 0.78rem; line-height: 1.4; color: #6b4700; background: #fffaf0; border: 1px solid #ecd3a0; border-radius: 8px; padding: 6px 8px; }
+.tot-help[hidden] { display: none; }

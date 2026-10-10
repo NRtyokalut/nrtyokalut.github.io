@@ -1429,6 +1429,7 @@
    * The shift that counts for a day (Toteuma applied), or null.
    *   no toteuma / peruttu → planned shift (kind "plan"; peruttu keeps the planned hours, local agreement)
    *   peruttu late + korvaus → null: peruutuskorvaus chosen instead, hours count 0
+   *   vaihto               → planned shift (hours as planned); lisät use the driven times
    *   muutos / korvattu    → actual times (kind "actual")
    *   kutsu on a day off   → actual times, or the told times when no actual given (kind "kutsu")
    */
@@ -1454,9 +1455,13 @@
     if (!ex || ex.start == null || ex.end == null) return false;
     const c = countedShift(d, toteumat);
     if (!c) return false;
-    const a = shiftSpan(c.start, c.end);
     const b = shiftSpan(ex.start, ex.end);
-    return Math.min(a.e, b.e) - Math.max(a.s, b.s) > 0;
+    const hit = function (st, en) {
+      const a = shiftSpan(st, en);
+      return Math.min(a.e, b.e) - Math.max(a.s, b.s) > 0;
+    };
+    if (hit(c.start, c.end)) return true;
+    return !!(c.t && c.t.type === "vaihto" && hit(c.t.start, c.t.end));
   }
 
   /**
@@ -1601,10 +1606,13 @@
    *   { type: "peruttu", late, korvaus }   cancelled, no new shift (late = notice after 17:00 the day before;
    *                                       korvaus = peruutuskorvaus chosen instead of the planned hours)
    *   { type: "korvattu", start, end }     cancelled and another shift given instead
+   *   { type: "vaihto", start, end }       shift swapped with a colleague (Lisälehti 11): start/end = shift
+   *                                       actually driven. Hours/LM stay as the OWN planned shift (longer
+   *                                       or shorter swap alike), lisät follow the driven shift, no korvaus.
    *   { type: "kutsu", start, end, aStart, aEnd }  called in on a planned day off
    *                                       (start/end as told, aStart/aEnd actual, optional)
    */
-  const TOTEUMA_TYPES = ["muutos", "peruttu", "korvattu", "kutsu"];
+  const TOTEUMA_TYPES = ["muutos", "peruttu", "korvattu", "kutsu", "vaihto"];
 
   function normToteuma(v) {
     if (!v || typeof v !== "object" || TOTEUMA_TYPES.indexOf(v.type) < 0) return null;
@@ -1661,6 +1669,8 @@
       if (planned) {
         if (!t || t.type === "kutsu") {
           addMin(d.date, planned.start, planned.end);
+        } else if (t.type === "vaihto") {
+          addMin(d.date, t.start, t.end); // Lisälehti 11: lisät from the driven shift, no korvaus
         } else if (t.type === "muutos") {
           addMin(d.date, t.start, t.end);
           const dv = deviation(planned, t);

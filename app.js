@@ -781,6 +781,7 @@
     if (!t) return "";
     if (t.type === "muutos") return "Toteutui " + fmt(t.start) + "–" + fmt(t.end) + (t.oma ? " (omasta pyynnöstä)" : "");
     if (t.type === "korvattu") return "Peruttu, tilalle " + fmt(t.start) + "–" + fmt(t.end);
+    if (t.type === "vaihto") return "Vaihdettu vuoro työkaverin kanssa, ajettu " + fmt(t.start) + "–" + fmt(t.end);
     if (t.type === "peruttu")
       return t.late
         ? "Peruttu klo 17 jälkeen, ei uutta vuoroa · " + (t.korvaus ? "valittu peruutuskorvaus, tunnit eivät lasketa" : "valittu tunnit (paikallinen sopimus)")
@@ -808,6 +809,7 @@
       const fig = c && c.kind !== "plan" ? ShiftCalc.computeShiftFigures(d.date, c.start, c.end, state.holidayMap) : null;
       const hrsTxt = fig
         ? "<br/>Lasketaan: kovat " + fmt(fig.hrs) + " · LM " + fmt(fig.me) + (planned ? " (suunniteltu LM " + fmt(d.me) + ")" : "")
+        : t.type === "vaihto" ? "<br/>Tunnit oman suunnitellun vuoron mukaan (kovat " + fmt(d.hrs) + " · LM " + fmt(d.me) + "), lisät ajetun vuoron mukaan. Ei poikkeamakorvausta."
         : t.type === "peruttu" ? (t.late && t.korvaus ? "<br/>Tunnit eivät lasketa (LM 0:00, suunniteltu " + fmt(d.me) + ")" : "<br/>Suunnitellut tunnit lasketaan (LM " + fmt(d.me) + ")") : "";
       line =
         '<div class="tot-line"><span class="tag tot">Toteuma</span> ' + totSummaryText(t) + hrsTxt +
@@ -817,22 +819,27 @@
     const c = totChoice(t);
     const opt = (v, label) => '<option value="' + v + '"' + (c === v ? " selected" : "") + ">" + label + "</option>";
     const val = (x) => (x != null ? fmt(x) : "");
-    const timed = t && (t.type === "muutos" || t.type === "korvattu");
+    const timed = t && (t.type === "muutos" || t.type === "korvattu" || t.type === "vaihto");
     const editor =
       '<div class="tot-editor"' + (open ? "" : " hidden") + ' data-date="' + d.date + '">' +
       '<label class="tot-wide">Mitä tapahtui?<select class="tot-type">' +
       (planned
         ? opt("", "Toteutui suunnitellusti (" + fmt(d.start) + "–" + fmt(d.end) + ")") +
           opt("muutos", "Aika muuttui (työnjohdon määräys)") +
-          opt("oma", "Aika muuttui omasta pyynnöstä") +
+          opt("oma", "Oman vuoron aika muuttui omasta pyynnöstä") +
+          opt("vaihto", "Vaihdettu vuoro (työkaverin kanssa)") +
           opt("korvattu", "Peruttu, tilalle toinen vuoro") +
           opt("peruttu_late", "Peruttu klo 17 jälkeen edellisenä päivänä, ei uutta vuoroa") +
           opt("peruttu_ok", "Peruttu ajoissa (ennen klo 17)")
         : opt("", "Vapaapäivä") + opt("kutsu", "Kutsuttu vapaapäivänä")) +
       "</select></label>" +
       (planned
-        ? '<label data-for="muutos oma korvattu">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
-          '<label data-for="muutos oma korvattu">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>' +
+        ? '<p class="tot-help" data-for="oma">Oma vuorosi alkoi tai päättyi eri aikaan pyynnöstäsi. Toteutuneet tunnit lasketaan kovina tunteina, LM:nä ja ylitöinä. Poikkeamakorvausta ei makseta.</p>' +
+          '<p class="tot-help" data-for="vaihto">Ajoit työkaverin vuoron (pidemmän tai lyhyemmän) ja hän ajoi sinun. Anna ajetun vuoron alku ja loppu. Kovat tunnit, Yö h ja LM lasketaan oman suunnitellun vuorosi mukaan (' + fmt(d.start) + "–" + fmt(d.end) + ', LM ' + fmt(d.me) + '), joten vaihto ei lisää eikä vähennä ylitöitä (Lisälehti 11). Ilta-, yö-, la-, su- ja aattolisät lasketaan ajetun vuoron mukaan. Ei poikkeama- eikä vapaa-ajan korvausta.</p>'
+        : '<p class="tot-help" data-for="">Vaihtoa vapaapäivälle ei voi merkitä. Merkitse vaihto sille päivälle, jolla oma vuorosi oli.</p>') +
+      (planned
+        ? '<label data-for="muutos oma korvattu vaihto">Toteutunut alku <input class="tot-start" inputmode="decimal" value="' + (timed ? val(t.start) : "") + '" placeholder="' + fmt(d.start) + '"></label>' +
+          '<label data-for="muutos oma korvattu vaihto">Toteutunut loppu <input class="tot-end" inputmode="decimal" value="' + (timed ? val(t.end) : "") + '" placeholder="' + fmt(d.end) + '"></label>' +
           peruutusChoice(p, d, t)
         : '<label data-for="kutsu">Ilmoitettu alku <input class="tot-start" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.start) : "") + '" placeholder="8:00"></label>' +
           '<label data-for="kutsu">Ilmoitettu loppu <input class="tot-end" inputmode="decimal" value="' + (t && t.type === "kutsu" ? val(t.end) : "") + '" placeholder="16:00"></label>' +
@@ -876,7 +883,7 @@
 
   function syncTotEditor(box) {
     const v = box.querySelector(".tot-type").value;
-    box.querySelectorAll("label[data-for], fieldset[data-for]").forEach((l) => {
+    box.querySelectorAll("label[data-for], fieldset[data-for], p[data-for]").forEach((l) => {
       l.hidden = l.dataset.for.split(" ").indexOf(v) < 0;
     });
   }
@@ -910,6 +917,7 @@
       return { value: { type: "muutos", start: a, end: b, oma: v === "oma" } };
     }
     if (v === "korvattu") return { value: { type: "korvattu", start: a, end: b } };
+    if (v === "vaihto") return { value: { type: "vaihto", start: a, end: b } };
     const o = { type: "kutsu", start: a, end: b };
     const as = get(".tot-astart");
     const ae = get(".tot-aend");
